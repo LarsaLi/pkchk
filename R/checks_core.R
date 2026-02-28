@@ -95,7 +95,7 @@ check_char_num_mapping <- function(adppk) {
   }
 
   map <- unique(adppk[, c("RACE", "RACEN")])
-  cnt <- aggregate(RACEN ~ RACE, map, function(x) length(unique(x)))
+  cnt <- stats::aggregate(RACEN ~ RACE, map, function(x) length(unique(x)))
   bad_race <- cnt$RACE[cnt$RACEN > 1]
   bad <- map[map$RACE %in% bad_race, , drop = FALSE]
 

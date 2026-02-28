@@ -27,7 +27,7 @@ generate_dummy_adppk <- function(
   sex <- sample(c("M", "F"), n_subj, TRUE)
   race <- sample(c("ASIAN", "WHITE", "BLACK"), n_subj, TRUE)
   racen <- c(ASIAN = 1, WHITE = 2, BLACK = 3)[race]
-  poppkfl <- ifelse(runif(n_subj) > 0.1, "Y", "N")
+  poppkfl <- ifelse(stats::runif(n_subj) > 0.1, "Y", "N")
 
   time_pts <- if (study_type == "SAD") c(0, 0.5, 1, 2, 4, 8, 12, 24) else c(0, 1, 2, 4, 8, 12)
   day_vec <- if (study_type == "SAD") 1 else rep(1:5, each = length(time_pts))
@@ -38,7 +38,7 @@ generate_dummy_adppk <- function(
     tm <- if (study_type == "SAD") time_pts else rep(time_pts, 5)
     ady <- if (study_type == "SAD") rep(1, length(tm)) else rep(1:5, each = length(time_pts))
     c0 <- ifelse(arm[i] %in% c("HIGH", "MAD_HIGH"), 120, 80)
-    aval <- pmax(0, c0 * exp(-0.25 * tm) + rnorm(length(tm), 0, 3))
+    aval <- pmax(0, c0 * exp(-0.25 * tm) + stats::rnorm(length(tm), 0, 3))
 
     rec_list[[i]] <- data.frame(
       STUDYID = "STDY01",
@@ -69,8 +69,8 @@ generate_dummy_adppk <- function(
       RACE = race[i],
       RACEN = as.integer(racen[i]),
       AGE = sample(18:70, 1),
-      WT = round(rnorm(1, 70, 12), 1),
-      HT = round(rnorm(1, 170, 10), 1),
+      WT = round(stats::rnorm(1, 70, 12), 1),
+      HT = round(stats::rnorm(1, 170, 10), 1),
       stringsAsFactors = FALSE
     )
   }

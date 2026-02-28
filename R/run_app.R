@@ -4,7 +4,7 @@
 run_app <- function() {
   reg <- checks_registry()
 
-  ui <- shiny::page_fluid(
+  ui <- shiny::fluidPage(
     bslib::bs_theme(version = 5),
     shiny::titlePanel("pkchk: NONMEM PK data review & checks"),
     shiny::sidebarLayout(
@@ -64,7 +64,7 @@ run_app <- function() {
       shiny::req(rv$adppk)
       d <- rv$adppk
       if (!all(c("ATPTN", "AVAL") %in% names(d))) return(invisible(NULL))
-      stats::plot(d$ATPTN, d$AVAL, pch = 19, col = "#2C7FB8", xlab = "ATPTN", ylab = "AVAL", main = "PK profile (all records)")
+      graphics::plot(d$ATPTN, d$AVAL, pch = 19, col = "#2C7FB8", xlab = "ATPTN", ylab = "AVAL", main = "PK profile (all records)")
     })
 
     shiny::observeEvent(input$run_checks, {

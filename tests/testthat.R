@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(rshinypkg)
+library(pkchk)
 
-test_check("rshinypkg")
+test_check("pkchk")
