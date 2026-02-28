@@ -1,25 +1,38 @@
-
-# rshinypkg
+# pkchk
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of rshinypkg is to ...
+`pkchk` is an R package for NONMEM PK data review and quality checks with a Shiny app interface.
+
+## Current MVP
+
+- Generate dummy ADPPK data (`SAD` / `MAD`)
+- Upload ADPPK (`.csv`)
+- Run modular checks (each check is an independent function)
+- View summary and basic visualization
+- Export checklist summary report (`.csv`)
 
 ## Installation
 
-You can install the development version of rshinypkg like so:
-
-``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+```r
+# install.packages("remotes")
+remotes::install_github("LarsaLi/pkchk")
 ```
 
-## Example
+## Run app
 
-This is a basic example which shows you how to solve a common problem:
-
-``` r
-library(rshinypkg)
-## basic example code
+```r
+library(pkchk)
+run_app()
 ```
 
+## Core functions
+
+- `generate_dummy_adppk()`
+- `check_required_vars()`
+- `check_name_label_len()`
+- `check_pk_no_dose()`
+- `check_poppk_consistency()`
+- `check_char_num_mapping()`
+- `run_checks()`
