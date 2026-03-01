@@ -5,6 +5,7 @@
 #'
 #' @param study_type Study type: "SAD" or "MAD".
 #' @param n_subj Number of subjects.
+#' @param period_n Number of periods (for multi-period studies).
 #' @param seed Random seed.
 #' @param inject_missing_dose Logical; inject subjects with PK but no dose records.
 #' @param inject_non_poppk Logical; inject non-POPPK subjects/records.
@@ -15,6 +16,7 @@
 generate_dummy_pk_package <- function(
     study_type = c("SAD", "MAD"),
     n_subj = 40,
+    period_n = 1,
     seed = 123,
     inject_missing_dose = FALSE,
     inject_non_poppk = FALSE,
@@ -51,22 +53,31 @@ generate_dummy_pk_package <- function(
   # --- EX -----------------------------------------------------------------
   base_dt <- as.POSIXct("2026-01-01 08:00:00", tz = "UTC")
   n_days <- if (study_type == "SAD") 1 else 5
+  period_n <- max(1, as.integer(period_n))
   ex_list <- vector("list", n_subj)
   for (i in seq_len(n_subj)) {
     dose_amt <- ifelse(grepl("HIGH", dm$ARM[i]), 100, 50)
-    days <- seq_len(n_days)
-    exdt <- base_dt + (days - 1) * 24 * 3600
-    ex_list[[i]] <- data.frame(
-      STUDYID = dm$STUDYID[i],
-      USUBJID = dm$USUBJID[i],
-      EXSEQ = seq_along(days),
-      EXTRT = "TEST DRUG",
-      EXDOSE = dose_amt,
-      EXDOSU = "mg",
-      EXROUTE = "ORAL",
-      EXSTDTC = format(exdt, "%Y-%m-%dT%H:%M:%SZ"),
-      stringsAsFactors = FALSE
-    )
+    one_subj_ex <- list()
+    exseq <- 1
+    for (p in seq_len(period_n)) {
+      days <- seq_len(n_days)
+      period_offset <- (p - 1) * (n_days + 2) * 24 * 3600
+      exdt <- base_dt + period_offset + (days - 1) * 24 * 3600
+      one_subj_ex[[p]] <- data.frame(
+        STUDYID = dm$STUDYID[i],
+        USUBJID = dm$USUBJID[i],
+        EXSEQ = seq(exseq, length.out = length(days)),
+        APERIOD = p,
+        EXTRT = "TEST DRUG",
+        EXDOSE = dose_amt,
+        EXDOSU = "mg",
+        EXROUTE = "ORAL",
+        EXSTDTC = format(exdt, "%Y-%m-%dT%H:%M:%SZ"),
+        stringsAsFactors = FALSE
+      )
+      exseq <- exseq + length(days)
+    }
+    ex_list[[i]] <- do.call(rbind, one_subj_ex)
   }
   ex <- do.call(rbind, ex_list)
 
@@ -156,6 +167,7 @@ generate_dummy_pk_package <- function(
     VISIT = paste0("DAY ", floor(ad_dose$TIME / 24) + 1),
     VISITNUM = floor(ad_dose$TIME / 24) + 1,
     ADY = floor(ad_dose$TIME / 24) + 1,
+    APERIOD = ad_dose$APERIOD,
     OCC = floor(ad_dose$TIME / 24) + 1,
     ATM = format(ad_dose$DTM, "%H:%M"),
     ATPT = "DOSE", ATPTN = NA_real_,
@@ -182,6 +194,7 @@ generate_dummy_pk_package <- function(
     VISIT = paste0("DAY ", floor(ad_pk$TIME / 24) + 1),
     VISITNUM = floor(ad_pk$TIME / 24) + 1,
     ADY = floor(ad_pk$TIME / 24) + 1,
+    APERIOD = floor((ad_pk$TIME) / ((n_days + 2) * 24)) + 1,
     OCC = ad_pk$PCDAY,
     ATM = format(ad_pk$DTM, "%H:%M"),
     ATPT = ad_pk$PCTPT, ATPTN = ad_pk$PCTPTNUM,
@@ -251,6 +264,7 @@ generate_dummy_pk_package <- function(
 generate_dummy_adppk <- function(
     study_type = c("SAD", "MAD"),
     n_subj = 40,
+    period_n = 1,
     seed = 123,
     inject_missing_dose = FALSE,
     inject_non_poppk = FALSE,
@@ -259,6 +273,7 @@ generate_dummy_adppk <- function(
   x <- generate_dummy_pk_package(
     study_type = study_type,
     n_subj = n_subj,
+    period_n = period_n,
     seed = seed,
     inject_missing_dose = inject_missing_dose,
     inject_non_poppk = inject_non_poppk,

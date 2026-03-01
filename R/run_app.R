@@ -12,14 +12,15 @@ run_app <- function() {
         shiny::h4("Data input"),
         shiny::fileInput("file_adppk", "Upload ADPPK (.csv/.xlsx)", accept = c(".csv", ".xlsx")),
         shiny::fileInput("file_cfg", "Optional check config (.yml/.yaml)", accept = c(".yml", ".yaml")),
-        shiny::selectInput("study_type", "Or generate dummy study type", choices = c("SAD", "MAD")),
+        shiny::selectInput("study_type", "Generate dummy study type", choices = c("SAD", "MAD")),
         shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
+        shiny::numericInput("period_n", "Number of periods", value = 1, min = 1, max = 10),
         shiny::actionButton("gen_dummy", "Generate dummy ADPPK"),
-        shiny::actionButton("load_example", "Load built-in example"),
         shiny::downloadButton("download_dummy_sources", "Download dummy DM/EX/PC/ADPPK"),
         shiny::hr(),
         shiny::h4("Checks"),
         shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
+        shiny::actionButton("select_all_checks", "Select all checks"),
         shiny::actionButton("run_checks", "Run selected checks"),
         shiny::hr(),
         shiny::downloadButton("download_checks", "Download checklist summary (CSV)"),
@@ -27,7 +28,7 @@ run_app <- function() {
       ),
       shiny::mainPanel(
         shiny::tabsetPanel(
-          shiny::tabPanel("Summary", shiny::tableOutput("summary_tbl"), shiny::tableOutput("head_tbl")),
+          shiny::tabPanel("Summary", shiny::tableOutput("summary_tbl"), shiny::tableOutput("summary_more_tbl"), DT::dataTableOutput("adppk_dt")),
           shiny::tabPanel("Visualization", shiny::plotOutput("pk_plot"), shiny::plotOutput("arm_box_plot")),
           shiny::tabPanel("Checks", shiny::tableOutput("check_result_tbl"), shiny::tableOutput("check_issue_tbl"))
         )
@@ -39,26 +40,12 @@ run_app <- function() {
     rv <- shiny::reactiveValues(adppk = NULL, addose = NULL, dm = NULL, ex = NULL, pc = NULL, check_out = NULL, cfg = load_check_config())
 
     shiny::observeEvent(input$gen_dummy, {
-      x <- generate_dummy_pk_package(study_type = input$study_type, n_subj = input$n_subj, seed = 123)
+      x <- generate_dummy_pk_package(study_type = input$study_type, n_subj = input$n_subj, period_n = input$period_n, seed = 123)
       rv$dm <- x$dm
       rv$ex <- x$ex
       rv$pc <- x$pc
       rv$adppk <- x$adppk
       rv$addose <- x$addose
-    })
-
-    shiny::observeEvent(input$load_example, {
-      ex <- system.file("extdata", "example_adppk.csv", package = "pkchk")
-      if (!nzchar(ex)) {
-        shiny::showNotification("No built-in example found", type = "error")
-        return()
-      }
-      rv$adppk <- utils::read.csv(ex, stringsAsFactors = FALSE)
-      rv$addose <- if (all(c("USUBJID", "DOSE") %in% names(rv$adppk))) {
-        unique(rv$adppk[, intersect(c("USUBJID", "DOSE", "DOSEU", "ADY", "ROUTE"), names(rv$adppk)), drop = FALSE])
-      } else {
-        data.frame(USUBJID = unique(rv$adppk$USUBJID), stringsAsFactors = FALSE)
-      }
     })
 
     shiny::observeEvent(input$file_cfg, {
@@ -92,23 +79,45 @@ run_app <- function() {
       }
     })
 
+    shiny::observeEvent(input$select_all_checks, {
+      shiny::updateCheckboxGroupInput(session, "checks", selected = reg$id)
+    })
+
     output$summary_tbl <- shiny::renderTable({
       shiny::req(rv$adppk)
       data.frame(
-        metric = c("n_records", "n_subjects", "n_paramcd", "n_checks_selected"),
+        metric = c("n_records", "n_subjects", "n_paramcd", "n_checks_selected", "n_periods", "pct_evid0", "pct_evid1"),
         value = c(
           nrow(rv$adppk),
           if ("USUBJID" %in% names(rv$adppk)) length(unique(rv$adppk$USUBJID)) else NA,
           if ("PARAMCD" %in% names(rv$adppk)) length(unique(rv$adppk$PARAMCD)) else NA,
-          length(input$checks)
+          length(input$checks),
+          if ("APERIOD" %in% names(rv$adppk)) length(unique(stats::na.omit(rv$adppk$APERIOD))) else NA,
+          if ("EVID" %in% names(rv$adppk)) round(100 * mean(rv$adppk$EVID == 0, na.rm = TRUE), 2) else NA,
+          if ("EVID" %in% names(rv$adppk)) round(100 * mean(rv$adppk$EVID == 1, na.rm = TRUE), 2) else NA
         ),
         stringsAsFactors = FALSE
       )
     })
 
-    output$head_tbl <- shiny::renderTable({
+    output$summary_more_tbl <- shiny::renderTable({
       shiny::req(rv$adppk)
-      utils::head(rv$adppk, 10)
+      d <- rv$adppk
+      data.frame(
+        metric = c("n_missing_DV", "n_blq", "min_TIME", "max_TIME"),
+        value = c(
+          if ("DV" %in% names(d)) sum(is.na(d$DV)) else NA,
+          if ("BLQFL" %in% names(d)) sum(toupper(as.character(d$BLQFL)) == "Y", na.rm = TRUE) else NA,
+          if ("TIME" %in% names(d)) round(min(as.numeric(d$TIME), na.rm = TRUE), 3) else NA,
+          if ("TIME" %in% names(d)) round(max(as.numeric(d$TIME), na.rm = TRUE), 3) else NA
+        ),
+        stringsAsFactors = FALSE
+      )
+    })
+
+    output$adppk_dt <- DT::renderDataTable({
+      shiny::req(rv$adppk)
+      DT::datatable(rv$adppk, filter = "top", options = list(pageLength = 25, scrollX = TRUE))
     })
 
     output$pk_plot <- shiny::renderPlot({
