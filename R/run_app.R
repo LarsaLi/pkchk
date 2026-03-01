@@ -16,6 +16,7 @@ run_app <- function() {
         shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
         shiny::actionButton("gen_dummy", "Generate dummy ADPPK"),
         shiny::actionButton("load_example", "Load built-in example"),
+        shiny::downloadButton("download_dummy_sources", "Download dummy DM/EX/PC/ADPPK"),
         shiny::hr(),
         shiny::h4("Checks"),
         shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
@@ -35,10 +36,13 @@ run_app <- function() {
   )
 
   server <- function(input, output, session) {
-    rv <- shiny::reactiveValues(adppk = NULL, addose = NULL, check_out = NULL, cfg = load_check_config())
+    rv <- shiny::reactiveValues(adppk = NULL, addose = NULL, dm = NULL, ex = NULL, pc = NULL, check_out = NULL, cfg = load_check_config())
 
     shiny::observeEvent(input$gen_dummy, {
-      x <- generate_dummy_adppk(study_type = input$study_type, n_subj = input$n_subj, seed = 123)
+      x <- generate_dummy_pk_package(study_type = input$study_type, n_subj = input$n_subj, seed = 123)
+      rv$dm <- x$dm
+      rv$ex <- x$ex
+      rv$pc <- x$pc
       rv$adppk <- x$adppk
       rv$addose <- x$addose
     })
@@ -137,6 +141,26 @@ run_app <- function() {
       shiny::req(rv$check_out)
       checks_to_issues(rv$check_out)
     })
+
+    output$download_dummy_sources <- shiny::downloadHandler(
+      filename = function() paste0("pkchk_dummy_sources_", Sys.Date(), ".zip"),
+      content = function(file) {
+        shiny::req(rv$dm, rv$ex, rv$pc, rv$adppk)
+        td <- tempdir()
+        f_dm <- file.path(td, "DM.csv")
+        f_ex <- file.path(td, "EX.csv")
+        f_pc <- file.path(td, "PC.csv")
+        f_ad <- file.path(td, "ADPPK.csv")
+        utils::write.csv(rv$dm, f_dm, row.names = FALSE)
+        utils::write.csv(rv$ex, f_ex, row.names = FALSE)
+        utils::write.csv(rv$pc, f_pc, row.names = FALSE)
+        utils::write.csv(rv$adppk, f_ad, row.names = FALSE)
+        owd <- getwd()
+        on.exit(setwd(owd), add = TRUE)
+        setwd(td)
+        utils::zip(zipfile = file, files = c("DM.csv", "EX.csv", "PC.csv", "ADPPK.csv"))
+      }
+    )
 
     output$download_checks <- shiny::downloadHandler(
       filename = function() paste0("pkchk_checklist_summary_", Sys.Date(), ".csv"),
