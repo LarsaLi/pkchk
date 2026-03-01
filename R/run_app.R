@@ -5,32 +5,36 @@ run_app <- function() {
   reg <- checks_registry()
 
   ui <- shiny::fluidPage(
-    theme = bslib::bs_theme(version = 5),
-    shiny::titlePanel("pkchk: NONMEM PK data review & checks"),
+    theme = bslib::bs_theme(version = 5, bootswatch = "flatly"),
+    shiny::tags$head(
+      shiny::tags$style(shiny::HTML(".app-subtitle{color:#5c6b73;margin-top:-8px;margin-bottom:12px;} .btn{margin-right:6px;margin-bottom:6px;}"))
+    ),
+    shiny::titlePanel("pkchk - NONMEM PK data review & checks"),
+    shiny::div(class = "app-subtitle", "Upload ADPPK or generate CDISC-like dummy data from DM/EX/PC, then run configurable QC checks."),
     shiny::sidebarLayout(
       shiny::sidebarPanel(
-        shiny::h4("Data input"),
+        shiny::h4("Data"),
         shiny::fileInput("file_adppk", "Upload ADPPK (.csv/.xlsx)", accept = c(".csv", ".xlsx")),
         shiny::fileInput("file_cfg", "Optional check config (.yml/.yaml)", accept = c(".yml", ".yaml")),
-        shiny::selectInput("study_type", "Generate dummy study type", choices = c("SAD", "MAD")),
+        shiny::selectInput("study_type", "Dummy study type", choices = c("SAD", "MAD")),
         shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
-        shiny::numericInput("period_n", "Number of periods", value = 1, min = 1, max = 10),
-        shiny::actionButton("gen_dummy", "Generate dummy ADPPK"),
-        shiny::downloadButton("download_dummy_sources", "Download dummy DM/EX/PC/ADPPK"),
+        shiny::numericInput("period_n", "Periods", value = 1, min = 1, max = 10),
+        shiny::actionButton("gen_dummy", "Generate dummy ADPPK", class = "btn-primary"),
+        shiny::downloadButton("download_dummy_sources", "Download DM/EX/PC/ADPPK"),
         shiny::hr(),
         shiny::h4("Checks"),
         shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
-        shiny::actionButton("select_all_checks", "Select all checks"),
-        shiny::actionButton("run_checks", "Run selected checks"),
+        shiny::actionButton("select_all_checks", "Select all"),
+        shiny::actionButton("run_checks", "Run checks", class = "btn-success"),
         shiny::hr(),
-        shiny::downloadButton("download_checks", "Download checklist summary (CSV)"),
-        shiny::downloadButton("download_report", "Download checklist report (HTML)")
+        shiny::downloadButton("download_checks", "Download check summary (CSV)"),
+        shiny::downloadButton("download_report", "Download check report (HTML)")
       ),
       shiny::mainPanel(
         shiny::tabsetPanel(
-          shiny::tabPanel("Summary", shiny::tableOutput("summary_tbl"), shiny::tableOutput("summary_more_tbl"), DT::dataTableOutput("adppk_dt")),
-          shiny::tabPanel("Visualization", shiny::plotOutput("pk_plot"), shiny::plotOutput("arm_box_plot")),
-          shiny::tabPanel("Checks", shiny::tableOutput("check_result_tbl"), shiny::tableOutput("check_issue_tbl"))
+          shiny::tabPanel("Summary", shiny::uiOutput("kpi_cards"), DT::dataTableOutput("summary_dt"), DT::dataTableOutput("adppk_dt")),
+          shiny::tabPanel("Visualization", shiny::plotOutput("pk_plot", height = 320), shiny::plotOutput("arm_box_plot", height = 320)),
+          shiny::tabPanel("Checks", DT::dataTableOutput("check_result_dt"), DT::dataTableOutput("check_issue_dt"))
         )
       )
     )
@@ -46,6 +50,7 @@ run_app <- function() {
       rv$pc <- x$pc
       rv$adppk <- x$adppk
       rv$addose <- x$addose
+      shiny::showNotification(sprintf("Dummy generated: %s records, %s subjects", nrow(rv$adppk), length(unique(rv$adppk$USUBJID))), type = "message")
     })
 
     shiny::observeEvent(input$file_cfg, {
@@ -77,35 +82,43 @@ run_app <- function() {
       } else {
         data.frame(USUBJID = unique(rv$adppk$USUBJID), stringsAsFactors = FALSE)
       }
+      shiny::showNotification(sprintf("Uploaded ADPPK: %s rows, %s columns", nrow(rv$adppk), ncol(rv$adppk)), type = "message")
     })
 
     shiny::observeEvent(input$select_all_checks, {
       shiny::updateCheckboxGroupInput(session, "checks", selected = reg$id)
     })
 
-    output$summary_tbl <- shiny::renderTable({
+    output$kpi_cards <- shiny::renderUI({
       shiny::req(rv$adppk)
-      data.frame(
-        metric = c("n_records", "n_subjects", "n_paramcd", "n_checks_selected", "n_periods", "pct_evid0", "pct_evid1"),
-        value = c(
-          nrow(rv$adppk),
-          if ("USUBJID" %in% names(rv$adppk)) length(unique(rv$adppk$USUBJID)) else NA,
-          if ("PARAMCD" %in% names(rv$adppk)) length(unique(rv$adppk$PARAMCD)) else NA,
-          length(input$checks),
-          if ("APERIOD" %in% names(rv$adppk)) length(unique(stats::na.omit(rv$adppk$APERIOD))) else NA,
-          if ("EVID" %in% names(rv$adppk)) round(100 * mean(rv$adppk$EVID == 0, na.rm = TRUE), 2) else NA,
-          if ("EVID" %in% names(rv$adppk)) round(100 * mean(rv$adppk$EVID == 1, na.rm = TRUE), 2) else NA
-        ),
-        stringsAsFactors = FALSE
+      d <- rv$adppk
+      nrec <- nrow(d)
+      nsub <- if ("USUBJID" %in% names(d)) length(unique(d$USUBJID)) else NA
+      nper <- if ("APERIOD" %in% names(d)) length(unique(stats::na.omit(d$APERIOD))) else NA
+      pblq <- if ("BLQFL" %in% names(d)) round(100 * mean(toupper(as.character(d$BLQFL)) == "Y", na.rm = TRUE), 2) else NA
+
+      shiny::div(
+        style = "display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;",
+        bslib::value_box(title = "Records", value = nrec, theme = bslib::value_box_theme(bg = "#e9f5ff", fg = "#0b4f7a")),
+        bslib::value_box(title = "Subjects", value = nsub, theme = bslib::value_box_theme(bg = "#eef9ef", fg = "#1c6b2a")),
+        bslib::value_box(title = "Periods", value = nper, theme = bslib::value_box_theme(bg = "#fff5e6", fg = "#8a4b00")),
+        bslib::value_box(title = "BLQ %", value = pblq, theme = bslib::value_box_theme(bg = "#f7efff", fg = "#5b2a86"))
       )
     })
 
-    output$summary_more_tbl <- shiny::renderTable({
+    output$summary_dt <- DT::renderDataTable({
       shiny::req(rv$adppk)
       d <- rv$adppk
-      data.frame(
-        metric = c("n_missing_DV", "n_blq", "min_TIME", "max_TIME"),
+      x <- data.frame(
+        metric = c("n_records", "n_subjects", "n_paramcd", "n_checks_selected", "n_periods", "pct_evid0", "pct_evid1", "n_missing_DV", "n_blq", "min_TIME", "max_TIME"),
         value = c(
+          nrow(d),
+          if ("USUBJID" %in% names(d)) length(unique(d$USUBJID)) else NA,
+          if ("PARAMCD" %in% names(d)) length(unique(d$PARAMCD)) else NA,
+          length(input$checks),
+          if ("APERIOD" %in% names(d)) length(unique(stats::na.omit(d$APERIOD))) else NA,
+          if ("EVID" %in% names(d)) round(100 * mean(d$EVID == 0, na.rm = TRUE), 2) else NA,
+          if ("EVID" %in% names(d)) round(100 * mean(d$EVID == 1, na.rm = TRUE), 2) else NA,
           if ("DV" %in% names(d)) sum(is.na(d$DV)) else NA,
           if ("BLQFL" %in% names(d)) sum(toupper(as.character(d$BLQFL)) == "Y", na.rm = TRUE) else NA,
           if ("TIME" %in% names(d)) round(min(as.numeric(d$TIME), na.rm = TRUE), 3) else NA,
@@ -113,11 +126,12 @@ run_app <- function() {
         ),
         stringsAsFactors = FALSE
       )
+      DT::datatable(x, options = list(dom = 't', paging = FALSE), rownames = FALSE)
     })
 
     output$adppk_dt <- DT::renderDataTable({
       shiny::req(rv$adppk)
-      DT::datatable(rv$adppk, filter = "top", options = list(pageLength = 25, scrollX = TRUE))
+      DT::datatable(rv$adppk, filter = "top", options = list(pageLength = 25, scrollX = TRUE, autoWidth = TRUE), rownames = FALSE)
     })
 
     output$pk_plot <- shiny::renderPlot({
@@ -144,11 +158,13 @@ run_app <- function() {
       checks_to_summary(rv$check_out)
     })
 
-    output$check_result_tbl <- shiny::renderTable({ result_table() })
+    output$check_result_dt <- DT::renderDataTable({
+      DT::datatable(result_table(), options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
+    })
 
-    output$check_issue_tbl <- shiny::renderTable({
+    output$check_issue_dt <- DT::renderDataTable({
       shiny::req(rv$check_out)
-      checks_to_issues(rv$check_out)
+      DT::datatable(checks_to_issues(rv$check_out), options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
     })
 
     output$download_dummy_sources <- shiny::downloadHandler(
