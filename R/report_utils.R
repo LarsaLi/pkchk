@@ -21,9 +21,29 @@ checks_to_summary <- function(check_out) {
 #' @return data.frame
 #' @export
 checks_to_issues <- function(check_out) {
+  suggestion_map <- c(
+    required_vars = "Add missing required ADPPK variables before modeling.",
+    name_label_len = "Shorten variable names/labels to standard limits.",
+    pk_no_dose = "Confirm dosing extraction and merge keys for affected subjects.",
+    poppk_consistency = "Review POPPK inclusion rule and flag derivation logic.",
+    char_num_mapping = "Rebuild controlled terminology map (char <-> numeric).",
+    predose_time = "Recalculate relative times using first dose anchor.",
+    sampling_dev_10pct = "Check nominal/actual time derivation and sampling windows.",
+    duplicates = "Deduplicate by subject-time-event key after merges.",
+    mdv_assignment = "Re-derive MDV from DV/EVID and missingness rules.",
+    amt_for_dose = "Ensure AMT is populated for every EVID=1 record."
+  )
+
   tabs <- lapply(check_out, function(x) {
     if (is.null(x$issue_table) || nrow(x$issue_table) == 0) return(NULL)
-    cbind(check_id = x$check_id, severity = if (!is.null(x$severity)) x$severity else "error", x$issue_table, stringsAsFactors = FALSE)
+    sug <- if (is.null(suggestion_map[[x$check_id]])) "Review source derivation and study-specific rule." else unname(suggestion_map[[x$check_id]])
+    cbind(
+      check_id = x$check_id,
+      severity = if (!is.null(x$severity)) x$severity else "error",
+      suggestion = sug,
+      x$issue_table,
+      stringsAsFactors = FALSE
+    )
   })
   tabs <- Filter(Negate(is.null), tabs)
   if (length(tabs) == 0) return(data.frame(info = "No issues found", stringsAsFactors = FALSE))

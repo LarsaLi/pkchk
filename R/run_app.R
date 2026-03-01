@@ -268,6 +268,7 @@ run_app <- function() {
       shiny::req(rv$adppk)
       rv$check_out <- run_checks(rv$adppk, rv$addose, selected = input$checks, cfg = rv$cfg)
       shiny::showNotification("Checks completed", type = "message")
+      shinydashboard::updateTabItems(session, "tabs", "checks")
     })
 
     result_table <- shiny::reactive({
@@ -276,16 +277,41 @@ run_app <- function() {
     })
 
     output$check_result_dt <- DT::renderDataTable({
+      x <- result_table_view()
       DT::datatable(
-        result_table(),
-        options = list(pageLength = 15, scrollX = TRUE),
+        x[, c("check_id", "severity", "status", "n_issue_view", "message")],
+        escape = FALSE,
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE,
+          columnDefs = list(list(targets = 3, title = "n_issue"))
+        ),
         rownames = FALSE,
-        selection = "single"
+        selection = "single",
+        callback = DT::JS(
+          "table.on('click', 'a.issue-link', function(e){",
+          "  e.preventDefault();",
+          "  var ck = $(this).data('check');",
+          "  Shiny.setInputValue('check_link_clicked', ck, {priority: 'event'});",
+          "});"
+        )
       )
+    })
+
+    result_table_view <- shiny::reactive({
+      rt <- result_table()
+      rt$n_issue_view <- ifelse(
+        rt$n_issue > 0,
+        sprintf("<a href='#' class='issue-link' data-check='%s'>%s</a>", rt$check_id, rt$n_issue),
+        as.character(rt$n_issue)
+      )
+      rt
     })
 
     selected_check <- shiny::reactive({
       shiny::req(rv$check_out)
+      clicked <- input$check_link_clicked
+      if (!is.null(clicked) && nzchar(clicked)) return(clicked)
       idx <- input$check_result_dt_rows_selected
       if (is.null(idx) || length(idx) == 0) return(NULL)
       rt <- result_table()
