@@ -7,6 +7,7 @@ checks_to_summary <- function(check_out) {
     data.frame(
       check_id = x$check_id,
       severity = if (!is.null(x$severity)) x$severity else "error",
+      status = if (!is.null(x$status)) x$status else if (isTRUE(x$passed)) "pass" else "fail",
       passed = x$passed,
       n_issue = x$n_issue,
       message = x$message,
@@ -33,12 +34,17 @@ checks_to_issues <- function(check_out) {
 #' @param adppk ADPPK data frame
 #' @param check_out Named list from `run_checks()`
 #' @param file Output html path
+#' @param cfg Optional check config list.
 #' @return Invisibly returns file path
 #' @export
-generate_check_report_html <- function(adppk, check_out, file) {
+generate_check_report_html <- function(adppk, check_out, file, cfg = NULL) {
   res <- checks_to_summary(check_out)
-  pass_n <- sum(res$passed, na.rm = TRUE)
-  fail_n <- sum(!res$passed, na.rm = TRUE)
+  pass_n <- sum(res$status == "pass", na.rm = TRUE)
+  fail_n <- sum(res$status == "fail", na.rm = TRUE)
+  skip_n <- sum(res$status == "skip", na.rm = TRUE)
+
+  pkg_ver <- as.character(utils::packageVersion("pkchk"))
+  git_sha <- tryCatch(system2("git", c("rev-parse", "--short", "HEAD"), stdout = TRUE, stderr = FALSE)[1], error = function(e) "NA")
 
   html <- c(
     "<html><head><meta charset='utf-8'><title>pkchk checklist report</title>\n",
@@ -46,18 +52,31 @@ generate_check_report_html <- function(adppk, check_out, file) {
     "table{border-collapse:collapse;width:100%;margin:12px 0;}th,td{border:1px solid #ddd;padding:6px;font-size:13px;}\n",
     "th{background:#f5f5f5;} .ok{color:#0a7d23;} .bad{color:#b00020;} .muted{color:#555;} </style></head><body>",
     sprintf("<h1>pkchk checklist report</h1><p class='muted'>Date: %s</p>", Sys.Date()),
-    sprintf("<p><b>Records</b>: %s | <b>Subjects</b>: %s | <b>Pass</b>: <span class='ok'>%s</span> | <b>Fail</b>: <span class='bad'>%s</span></p>",
-            nrow(adppk), if ("USUBJID" %in% names(adppk)) length(unique(adppk$USUBJID)) else NA, pass_n, fail_n),
+    sprintf("<p><b>Package</b>: pkchk %s | <b>Git</b>: %s</p>", pkg_ver, git_sha),
+    sprintf("<p><b>Records</b>: %s | <b>Subjects</b>: %s | <b>Pass</b>: <span class='ok'>%s</span> | <b>Fail</b>: <span class='bad'>%s</span> | <b>Skip</b>: %s</p>",
+            nrow(adppk), if ("USUBJID" %in% names(adppk)) length(unique(adppk$USUBJID)) else NA, pass_n, fail_n, skip_n),
     "<h2>Summary</h2>",
-    "<table><tr><th>check_id</th><th>severity</th><th>passed</th><th>n_issue</th><th>message</th></tr>"
+    "<table><tr><th>check_id</th><th>severity</th><th>status</th><th>n_issue</th><th>message</th></tr>"
   )
 
   for (i in seq_len(nrow(res))) {
     row <- res[i, ]
     html <- c(html, sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
-                            row$check_id, row$severity, row$passed, row$n_issue, row$message))
+                            row$check_id, row$severity, row$status, row$n_issue, row$message))
   }
-  html <- c(html, "</table>", "<h2>Issue details</h2>")
+  html <- c(html, "</table>")
+
+  if (!is.null(cfg) && !is.null(cfg$checks)) {
+    html <- c(html, "<h2>Effective configuration</h2>",
+              sprintf("<p>Profile: %s | Version: %s</p>",
+                      ifelse(is.null(cfg$profile), "NA", cfg$profile),
+                      ifelse(is.null(cfg$version), "NA", cfg$version)),
+              "<pre>")
+    cfg_txt <- utils::capture.output(utils::str(cfg$checks, give.attr = FALSE))
+    html <- c(html, paste(cfg_txt, collapse = "\n"), "</pre>")
+  }
+
+  html <- c(html, "<h2>Issue details</h2>")
 
   for (nm in names(check_out)) {
     x <- check_out[[nm]]

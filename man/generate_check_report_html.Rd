@@ -4,7 +4,7 @@
 \alias{generate_check_report_html}
 \title{Generate HTML checklist report}
 \usage{
-generate_check_report_html(adppk, check_out, file)
+generate_check_report_html(adppk, check_out, file, cfg = NULL)
 }
 \arguments{
 \item{adppk}{ADPPK data frame}
@@ -12,6 +12,8 @@ generate_check_report_html(adppk, check_out, file)
 \item{check_out}{Named list from \code{run_checks()}}
 
 \item{file}{Output html path}
+
+\item{cfg}{Optional check config list.}
 }
 \value{
 Invisibly returns file path

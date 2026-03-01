@@ -149,7 +149,7 @@ run_app <- function() {
       filename = function() paste0("pkchk_checklist_report_", Sys.Date(), ".html"),
       content = function(file) {
         shiny::req(rv$check_out)
-        generate_check_report_html(rv$adppk, rv$check_out, file)
+        generate_check_report_html(rv$adppk, rv$check_out, file, cfg = rv$cfg)
       }
     )
   }
