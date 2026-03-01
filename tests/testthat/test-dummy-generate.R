@@ -7,6 +7,7 @@ test_that("generate_dummy_adppk returns expected structure", {
   expect_true(nrow(x$adppk) > 0)
   expect_true(length(unique(x$adppk$USUBJID)) == 20)
   expect_true(all(c("STUDYID", "USUBJID", "PARAMCD", "AVAL", "POPPKFL") %in% names(x$adppk)))
+  expect_true(all(!is.na(x$adppk$ARM)))
 })
 
 

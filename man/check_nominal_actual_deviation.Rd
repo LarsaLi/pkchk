@@ -4,10 +4,12 @@
 \alias{check_nominal_actual_deviation}
 \title{Check large nominal/actual deviation (absolute)}
 \usage{
-check_nominal_actual_deviation(adppk)
+check_nominal_actual_deviation(adppk, abs_dev_threshold = 2)
 }
 \arguments{
 \item{adppk}{ADPPK data frame.}
+
+\item{abs_dev_threshold}{Absolute deviation threshold.}
 }
 \value{
 List with check result.

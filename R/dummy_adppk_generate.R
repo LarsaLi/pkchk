@@ -22,8 +22,11 @@ generate_dummy_adppk <- function(
 
   sid <- sprintf("%03d", seq_len(n_subj))
   usubjid <- paste0("STDY01-", sid)
-  arm <- ifelse(study_type == "SAD", sample(c("LOW", "HIGH"), n_subj, TRUE),
-                sample(c("MAD_LOW", "MAD_HIGH"), n_subj, TRUE))
+  arm <- if (study_type == "SAD") {
+    sample(c("LOW", "HIGH"), n_subj, TRUE)
+  } else {
+    sample(c("MAD_LOW", "MAD_HIGH"), n_subj, TRUE)
+  }
   sex <- sample(c("M", "F"), n_subj, TRUE)
   race <- sample(c("ASIAN", "WHITE", "BLACK"), n_subj, TRUE)
   racen <- c(ASIAN = 1, WHITE = 2, BLACK = 3)[race]

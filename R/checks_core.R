@@ -208,24 +208,25 @@ check_predose_time <- function(adppk) {
   )
 }
 
-#' Check nominal vs actual time deviation >10%
+#' Check nominal vs actual time deviation > threshold
 #' @param adppk ADPPK data frame.
+#' @param threshold_pct Allowed percent deviation threshold.
 #' @return List with check result.
 #' @export
-check_sampling_deviation <- function(adppk) {
+check_sampling_deviation <- function(adppk, threshold_pct = 10) {
   miss <- .check_missing_vars(adppk, c("TIME", "NTIME"), "sampling_dev_10pct")
   if (!is.null(miss)) return(miss)
   nt <- as.numeric(adppk$NTIME)
   tt <- as.numeric(adppk$TIME)
   dev <- abs(tt - nt) / pmax(1e-8, abs(nt))
-  bad <- which(dev > 0.10 & !is.na(dev))
+  bad <- which(dev > (as.numeric(threshold_pct) / 100) & !is.na(dev))
   issues <- if (length(bad) == 0) data.frame() else data.frame(USUBJID = adppk$USUBJID[bad], NTIME = nt[bad], TIME = tt[bad], dev_pct = round(dev[bad] * 100, 2), stringsAsFactors = FALSE)
 
   list(
     check_id = "sampling_dev_10pct",
     passed = length(bad) == 0,
     n_issue = length(bad),
-    message = if (length(bad) == 0) "Sampling deviations within 10%" else "Sampling deviation >10% found",
+    message = if (length(bad) == 0) sprintf("Sampling deviations within %s%%", threshold_pct) else sprintf("Sampling deviation >%s%% found", threshold_pct),
     issue_table = issues
   )
 }
@@ -290,19 +291,20 @@ check_covariate_outliers <- function(adppk) {
 
 #' Check large nominal/actual deviation (absolute)
 #' @param adppk ADPPK data frame.
+#' @param abs_dev_threshold Absolute deviation threshold.
 #' @return List with check result.
 #' @export
-check_nominal_actual_deviation <- function(adppk) {
+check_nominal_actual_deviation <- function(adppk, abs_dev_threshold = 2) {
   miss <- .check_missing_vars(adppk, c("TIME", "NTIME"), "nominal_actual_deviation")
   if (!is.null(miss)) return(miss)
   dev <- abs(as.numeric(adppk$TIME) - as.numeric(adppk$NTIME))
-  idx <- which(dev > 2 & !is.na(dev))
+  idx <- which(dev > as.numeric(abs_dev_threshold) & !is.na(dev))
   issues <- if (length(idx) == 0) data.frame() else data.frame(USUBJID = adppk$USUBJID[idx], TIME = adppk$TIME[idx], NTIME = adppk$NTIME[idx], abs_dev = dev[idx], stringsAsFactors = FALSE)
   list(
     check_id = "nominal_actual_deviation",
     passed = nrow(issues) == 0,
     n_issue = nrow(issues),
-    message = if (nrow(issues) == 0) "Nominal/actual absolute deviations acceptable" else "Large absolute nominal/actual deviations found",
+    message = if (nrow(issues) == 0) sprintf("Nominal/actual absolute deviations <= %s", abs_dev_threshold) else sprintf("Large absolute nominal/actual deviations > %s found", abs_dev_threshold),
     issue_table = issues
   )
 }
@@ -335,9 +337,10 @@ check_nominal_actual_consistency <- function(adppk) {
 
 #' Check missingness by EVID
 #' @param adppk ADPPK data frame.
+#' @param high_missing_threshold_pct Missingness threshold percent.
 #' @return List with check result.
 #' @export
-check_missing_by_evid <- function(adppk) {
+check_missing_by_evid <- function(adppk, high_missing_threshold_pct = 20) {
   miss <- .check_missing_vars(adppk, "EVID", "missing_by_evid")
   if (!is.null(miss)) return(miss)
 
@@ -352,12 +355,12 @@ check_missing_by_evid <- function(adppk) {
     out <- rbind(out, tmp)
   }
 
-  hi <- out[out$missing_pct > 20, , drop = FALSE]
+  hi <- out[out$missing_pct > as.numeric(high_missing_threshold_pct), , drop = FALSE]
   list(
     check_id = "missing_by_evid",
     passed = nrow(hi) == 0,
     n_issue = nrow(hi),
-    message = if (nrow(hi) == 0) "Missingness by EVID acceptable" else "High missingness (>20%) by EVID",
+    message = if (nrow(hi) == 0) sprintf("Missingness by EVID <= %s%%", high_missing_threshold_pct) else sprintf("High missingness (>%s%%) by EVID", high_missing_threshold_pct),
     issue_table = out
   )
 }
@@ -444,9 +447,10 @@ check_bloq_middle <- function(adppk) {
 
 #' Abnormally high predose concentrations
 #' @param adppk ADPPK data frame.
+#' @param predose_ratio_threshold Predose to subject max concentration ratio threshold.
 #' @return List with check result.
 #' @export
-check_high_predose <- function(adppk) {
+check_high_predose <- function(adppk, predose_ratio_threshold = 0.2) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "AVAL", "ATPTN"), "high_predose")
   if (!is.null(miss)) return(miss)
   pre_idx <- which(as.numeric(adppk$ATPTN) <= 1)
@@ -455,13 +459,13 @@ check_high_predose <- function(adppk) {
   mx <- stats::aggregate(AVAL ~ USUBJID, adppk, max)
   names(mx)[2] <- "MAXAVAL"
   d <- merge(adppk[pre_idx, c("USUBJID", "AVAL", "ATPTN")], mx, by = "USUBJID", all.x = TRUE)
-  bad <- d[d$AVAL > 0.2 * d$MAXAVAL & d$MAXAVAL > 0, , drop = FALSE]
+  bad <- d[d$AVAL > as.numeric(predose_ratio_threshold) * d$MAXAVAL & d$MAXAVAL > 0, , drop = FALSE]
 
   list(
     check_id = "high_predose",
     passed = nrow(bad) == 0,
     n_issue = nrow(bad),
-    message = if (nrow(bad) == 0) "No abnormally high predose concentrations" else "Abnormally high predose concentrations found",
+    message = if (nrow(bad) == 0) sprintf("No predose concentrations above %.2f of subject max", predose_ratio_threshold) else sprintf("Predose concentrations above %.2f of subject max found", predose_ratio_threshold),
     issue_table = bad
   )
 }
@@ -621,30 +625,35 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
   }
 
   out <- list()
-  if ("required_vars" %in% selected) out[["required_vars"]] <- check_required_vars(adppk)
-  if ("name_label_len" %in% selected) out[["name_label_len"]] <- check_name_label_len(adppk)
-  if ("pk_no_dose" %in% selected) out[["pk_no_dose"]] <- check_pk_no_dose(adppk, addose)
-  if ("poppk_consistency" %in% selected) out[["poppk_consistency"]] <- check_poppk_consistency(adppk)
-  if ("char_num_mapping" %in% selected) out[["char_num_mapping"]] <- check_char_num_mapping(adppk)
-  if ("char_truncation" %in% selected) out[["char_truncation"]] <- check_char_truncation(adppk)
-  if ("fixed_covariates" %in% selected) out[["fixed_covariates"]] <- check_fixed_covariates(adppk)
-  if ("predose_time" %in% selected) out[["predose_time"]] <- check_predose_time(adppk)
-  if ("sampling_dev_10pct" %in% selected) out[["sampling_dev_10pct"]] <- check_sampling_deviation(adppk)
-  if ("unexpected_values" %in% selected) out[["unexpected_values"]] <- check_unexpected_values(adppk)
-  if ("covariate_outliers" %in% selected) out[["covariate_outliers"]] <- check_covariate_outliers(adppk)
-  if ("nominal_actual_deviation" %in% selected) out[["nominal_actual_deviation"]] <- check_nominal_actual_deviation(adppk)
-  if ("nominal_actual_consistency" %in% selected) out[["nominal_actual_consistency"]] <- check_nominal_actual_consistency(adppk)
-  if ("missing_by_evid" %in% selected) out[["missing_by_evid"]] <- check_missing_by_evid(adppk)
-  if ("duplicates" %in% selected) out[["duplicates"]] <- check_duplicates(adppk)
-  if ("expected_ranges" %in% selected) out[["expected_ranges"]] <- check_expected_ranges(adppk)
-  if ("bloq_middle" %in% selected) out[["bloq_middle"]] <- check_bloq_middle(adppk)
-  if ("high_predose" %in% selected) out[["high_predose"]] <- check_high_predose(adppk)
-  if ("amt_for_dose" %in% selected) out[["amt_for_dose"]] <- check_amt_for_dose(adppk)
-  if ("mdv_assignment" %in% selected) out[["mdv_assignment"]] <- check_mdv_assignment(adppk)
-  if ("evid4_once" %in% selected) out[["evid4_once"]] <- check_evid4_once(adppk)
-  if ("time_sequential" %in% selected) out[["time_sequential"]] <- check_time_sequential(adppk)
-  if ("cross_study_alignment" %in% selected) out[["cross_study_alignment"]] <- check_cross_study_alignment(adppk)
-  if ("standardized_values" %in% selected) out[["standardized_values"]] <- check_standardized_values(adppk)
+  cfg_item <- function(id) {
+    if (is.null(cfg) || is.null(cfg$checks) || is.null(cfg$checks[[id]])) return(NULL)
+    cfg$checks[[id]]
+  }
+
+  if ("required_vars" %in% selected) out[["required_vars"]] <- run_check_with_cfg(check_required_vars, list(adppk = adppk), cfg_item("required_vars"))
+  if ("name_label_len" %in% selected) out[["name_label_len"]] <- run_check_with_cfg(check_name_label_len, list(adppk = adppk), cfg_item("name_label_len"))
+  if ("pk_no_dose" %in% selected) out[["pk_no_dose"]] <- run_check_with_cfg(check_pk_no_dose, list(adppk = adppk, addose = addose), cfg_item("pk_no_dose"))
+  if ("poppk_consistency" %in% selected) out[["poppk_consistency"]] <- run_check_with_cfg(check_poppk_consistency, list(adppk = adppk), cfg_item("poppk_consistency"))
+  if ("char_num_mapping" %in% selected) out[["char_num_mapping"]] <- run_check_with_cfg(check_char_num_mapping, list(adppk = adppk), cfg_item("char_num_mapping"))
+  if ("char_truncation" %in% selected) out[["char_truncation"]] <- run_check_with_cfg(check_char_truncation, list(adppk = adppk), cfg_item("char_truncation"))
+  if ("fixed_covariates" %in% selected) out[["fixed_covariates"]] <- run_check_with_cfg(check_fixed_covariates, list(adppk = adppk), cfg_item("fixed_covariates"))
+  if ("predose_time" %in% selected) out[["predose_time"]] <- run_check_with_cfg(check_predose_time, list(adppk = adppk), cfg_item("predose_time"))
+  if ("sampling_dev_10pct" %in% selected) out[["sampling_dev_10pct"]] <- run_check_with_cfg(check_sampling_deviation, list(adppk = adppk), cfg_item("sampling_dev_10pct"))
+  if ("unexpected_values" %in% selected) out[["unexpected_values"]] <- run_check_with_cfg(check_unexpected_values, list(adppk = adppk), cfg_item("unexpected_values"))
+  if ("covariate_outliers" %in% selected) out[["covariate_outliers"]] <- run_check_with_cfg(check_covariate_outliers, list(adppk = adppk), cfg_item("covariate_outliers"))
+  if ("nominal_actual_deviation" %in% selected) out[["nominal_actual_deviation"]] <- run_check_with_cfg(check_nominal_actual_deviation, list(adppk = adppk), cfg_item("nominal_actual_deviation"))
+  if ("nominal_actual_consistency" %in% selected) out[["nominal_actual_consistency"]] <- run_check_with_cfg(check_nominal_actual_consistency, list(adppk = adppk), cfg_item("nominal_actual_consistency"))
+  if ("missing_by_evid" %in% selected) out[["missing_by_evid"]] <- run_check_with_cfg(check_missing_by_evid, list(adppk = adppk), cfg_item("missing_by_evid"))
+  if ("duplicates" %in% selected) out[["duplicates"]] <- run_check_with_cfg(check_duplicates, list(adppk = adppk), cfg_item("duplicates"))
+  if ("expected_ranges" %in% selected) out[["expected_ranges"]] <- run_check_with_cfg(check_expected_ranges, list(adppk = adppk), cfg_item("expected_ranges"))
+  if ("bloq_middle" %in% selected) out[["bloq_middle"]] <- run_check_with_cfg(check_bloq_middle, list(adppk = adppk), cfg_item("bloq_middle"))
+  if ("high_predose" %in% selected) out[["high_predose"]] <- run_check_with_cfg(check_high_predose, list(adppk = adppk), cfg_item("high_predose"))
+  if ("amt_for_dose" %in% selected) out[["amt_for_dose"]] <- run_check_with_cfg(check_amt_for_dose, list(adppk = adppk), cfg_item("amt_for_dose"))
+  if ("mdv_assignment" %in% selected) out[["mdv_assignment"]] <- run_check_with_cfg(check_mdv_assignment, list(adppk = adppk), cfg_item("mdv_assignment"))
+  if ("evid4_once" %in% selected) out[["evid4_once"]] <- run_check_with_cfg(check_evid4_once, list(adppk = adppk), cfg_item("evid4_once"))
+  if ("time_sequential" %in% selected) out[["time_sequential"]] <- run_check_with_cfg(check_time_sequential, list(adppk = adppk), cfg_item("time_sequential"))
+  if ("cross_study_alignment" %in% selected) out[["cross_study_alignment"]] <- run_check_with_cfg(check_cross_study_alignment, list(adppk = adppk), cfg_item("cross_study_alignment"))
+  if ("standardized_values" %in% selected) out[["standardized_values"]] <- run_check_with_cfg(check_standardized_values, list(adppk = adppk), cfg_item("standardized_values"))
 
   sev_map <- c(
     required_vars = "error", name_label_len = "error", pk_no_dose = "error", poppk_consistency = "error",

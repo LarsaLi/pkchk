@@ -4,10 +4,12 @@
 \alias{check_high_predose}
 \title{Abnormally high predose concentrations}
 \usage{
-check_high_predose(adppk)
+check_high_predose(adppk, predose_ratio_threshold = 0.2)
 }
 \arguments{
 \item{adppk}{ADPPK data frame.}
+
+\item{predose_ratio_threshold}{Predose to subject max concentration ratio threshold.}
 }
 \value{
 List with check result.

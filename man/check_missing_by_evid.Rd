@@ -4,10 +4,12 @@
 \alias{check_missing_by_evid}
 \title{Check missingness by EVID}
 \usage{
-check_missing_by_evid(adppk)
+check_missing_by_evid(adppk, high_missing_threshold_pct = 20)
 }
 \arguments{
 \item{adppk}{ADPPK data frame.}
+
+\item{high_missing_threshold_pct}{Missingness threshold percent.}
 }
 \value{
 List with check result.

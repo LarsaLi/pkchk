@@ -2,16 +2,18 @@
 % Please edit documentation in R/checks_core.R
 \name{check_sampling_deviation}
 \alias{check_sampling_deviation}
-\title{Check nominal vs actual time deviation >10\%}
+\title{Check nominal vs actual time deviation > threshold}
 \usage{
-check_sampling_deviation(adppk)
+check_sampling_deviation(adppk, threshold_pct = 10)
 }
 \arguments{
 \item{adppk}{ADPPK data frame.}
+
+\item{threshold_pct}{Allowed percent deviation threshold.}
 }
 \value{
 List with check result.
 }
 \description{
-Check nominal vs actual time deviation >10\%
+Check nominal vs actual time deviation > threshold
 }
