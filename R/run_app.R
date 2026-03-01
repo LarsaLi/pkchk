@@ -101,11 +101,20 @@ run_app <- function() {
         shinydashboard::tabItem(
           tabName = "checks",
           shiny::fluidRow(
-            shinydashboard::box(title = "Check results", width = 12, status = "success", solidHeader = TRUE,
-                                DT::dataTableOutput("check_result_dt"))
+            shinydashboard::box(
+              title = "Check results (click a row for details)", width = 12, status = "success", solidHeader = TRUE,
+              DT::dataTableOutput("check_result_dt"),
+              shiny::br(),
+              shiny::actionButton("open_check_modal", "Open selected check details", class = "btn-info")
+            )
           ),
           shiny::fluidRow(
-            shinydashboard::box(title = "Check issue details", width = 12, status = "warning", solidHeader = TRUE,
+            shinydashboard::box(title = "Selected check issue details", width = 12, status = "warning", solidHeader = TRUE,
+                                shiny::uiOutput("selected_check_title"),
+                                DT::dataTableOutput("check_issue_selected_dt"))
+          ),
+          shiny::fluidRow(
+            shinydashboard::box(title = "All issue details", width = 12, status = "warning", solidHeader = TRUE,
                                 DT::dataTableOutput("check_issue_dt"))
           )
         )
@@ -267,7 +276,64 @@ run_app <- function() {
     })
 
     output$check_result_dt <- DT::renderDataTable({
-      DT::datatable(result_table(), options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
+      DT::datatable(
+        result_table(),
+        options = list(pageLength = 15, scrollX = TRUE),
+        rownames = FALSE,
+        selection = "single"
+      )
+    })
+
+    selected_check <- shiny::reactive({
+      shiny::req(rv$check_out)
+      idx <- input$check_result_dt_rows_selected
+      if (is.null(idx) || length(idx) == 0) return(NULL)
+      rt <- result_table()
+      rt$check_id[idx[1]]
+    })
+
+    output$selected_check_title <- shiny::renderUI({
+      cid <- selected_check()
+      if (is.null(cid)) return(shiny::tags$em("Select one check above to inspect detailed records."))
+      msg <- rv$check_out[[cid]]$message
+      shiny::tags$div(
+        shiny::tags$b(cid),
+        shiny::tags$div(style = "margin-top:6px;color:#475467;", msg)
+      )
+    })
+
+    output$check_issue_selected_dt <- DT::renderDataTable({
+      shiny::req(rv$check_out)
+      cid <- selected_check()
+      if (is.null(cid)) {
+        return(DT::datatable(data.frame(info = "No check selected", stringsAsFactors = FALSE), options = list(dom = 't'), rownames = FALSE))
+      }
+      tab <- rv$check_out[[cid]]$issue_table
+      if (is.null(tab) || nrow(tab) == 0) {
+        return(DT::datatable(data.frame(info = "No issue rows for selected check", stringsAsFactors = FALSE), options = list(dom = 't'), rownames = FALSE))
+      }
+      DT::datatable(tab, options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
+    })
+
+    shiny::observeEvent(input$open_check_modal, {
+      shiny::req(rv$check_out)
+      cid <- selected_check()
+      if (is.null(cid)) {
+        shiny::showNotification("Please select one check row first.", type = "warning")
+        return()
+      }
+      tab <- rv$check_out[[cid]]$issue_table
+      msg <- rv$check_out[[cid]]$message
+      if (is.null(tab) || nrow(tab) == 0) {
+        tab <- data.frame(info = "No issue rows for selected check", stringsAsFactors = FALSE)
+      }
+      shiny::showModal(shiny::modalDialog(
+        title = paste("Check details:", cid),
+        shiny::tags$p(msg),
+        DT::datatable(tab, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE),
+        easyClose = TRUE,
+        size = "l"
+      ))
     })
 
     output$check_issue_dt <- DT::renderDataTable({
