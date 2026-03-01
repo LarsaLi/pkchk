@@ -5,8 +5,11 @@ run_app <- function() {
   reg <- checks_registry()
 
   ui <- shinydashboard::dashboardPage(
-    skin = "blue",
-    shinydashboard::dashboardHeader(title = "pkchk"),
+    skin = "black",
+    shinydashboard::dashboardHeader(
+      title = shiny::tags$span(style = "font-weight:700;", "pkchk"),
+      titleWidth = 320
+    ),
     shinydashboard::dashboardSidebar(
       width = 320,
       shinydashboard::sidebarMenu(
@@ -36,9 +39,30 @@ run_app <- function() {
     ),
     shinydashboard::dashboardBody(
       shiny::tags$head(
-        shiny::tags$style(shiny::HTML(
-          ".small-box .icon-large{font-size:36px; opacity:0.25;} .content-header{padding-bottom:2px;}"
-        ))
+        shiny::tags$style(shiny::HTML(paste(
+          "body{font-family:Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;}",
+          ".main-header .logo{font-weight:700;letter-spacing:.2px;background:#111827 !important;}",
+          ".main-header .navbar{background:#111827 !important;}",
+          ".main-sidebar{background:#0f172a !important;}",
+          ".sidebar-menu>li>a{padding-top:12px;padding-bottom:12px;}",
+          ".sidebar-menu>li.active>a,.sidebar-menu>li:hover>a{border-left-color:#22c55e !important;background:#111b33 !important;}",
+          ".content-wrapper,.right-side{background:#f4f6fb;}",
+          ".box{border:none;border-radius:14px;box-shadow:0 6px 18px rgba(16,24,40,.06);}",
+          ".box.box-primary>.box-header{background:#eef4ff;color:#0f2f78;border-top-left-radius:14px;border-top-right-radius:14px;}",
+          ".box.box-info>.box-header{background:#e9f8ff;color:#0b4f7a;border-top-left-radius:14px;border-top-right-radius:14px;}",
+          ".box.box-success>.box-header{background:#eefbf2;color:#14532d;border-top-left-radius:14px;border-top-right-radius:14px;}",
+          ".box.box-warning>.box-header{background:#fff7eb;color:#7a3e06;border-top-left-radius:14px;border-top-right-radius:14px;}",
+          ".btn{border-radius:10px;font-weight:600;}",
+          ".btn-primary{background:#2563eb;border-color:#2563eb;}",
+          ".btn-success{background:#16a34a;border-color:#16a34a;}",
+          ".small-box{border-radius:14px;box-shadow:0 6px 16px rgba(16,24,40,.08);}",
+          ".small-box>.inner{padding:14px 12px;}",
+          ".small-box h3{font-size:28px;font-weight:700;}",
+          ".small-box p{font-size:13px;}",
+          ".nav-tabs-custom{border-radius:12px;}",
+          ".dataTables_wrapper .dataTables_filter input,.dataTables_wrapper .dataTables_length select{border-radius:8px;border:1px solid #d0d5dd;}",
+          sep=""
+        )))
       ),
       shinydashboard::tabItems(
         shinydashboard::tabItem(
