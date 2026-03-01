@@ -5,7 +5,7 @@ run_app <- function() {
   reg <- checks_registry()
 
   ui <- shiny::fluidPage(
-    bslib::bs_theme(version = 5),
+    theme = bslib::bs_theme(version = 5),
     shiny::titlePanel("pkchk: NONMEM PK data review & checks"),
     shiny::sidebarLayout(
       shiny::sidebarPanel(
