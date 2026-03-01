@@ -7,7 +7,19 @@ run_app <- function() {
   ui <- shiny::fluidPage(
     theme = bslib::bs_theme(version = 5, bootswatch = "flatly"),
     shiny::tags$head(
-      shiny::tags$style(shiny::HTML(".app-subtitle{color:#5c6b73;margin-top:-8px;margin-bottom:12px;} .btn{margin-right:6px;margin-bottom:6px;}"))
+      shiny::tags$style(shiny::HTML(paste(
+        ".app-subtitle{color:#5c6b73;margin-top:-8px;margin-bottom:14px;}",
+        ".btn{margin-right:6px;margin-bottom:6px;border-radius:10px;}",
+        ".well{border-radius:14px;border:1px solid #e6ebef;background:#fbfcfe;}",
+        ".nav-tabs{margin-bottom:14px;}",
+        ".nav-tabs>li>a{border-radius:10px 10px 0 0;}",
+        ".kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:12px;margin-bottom:14px;}",
+        ".kpi-card{background:#ffffff;border:1px solid #e5e9ef;border-radius:12px;padding:12px 14px;box-shadow:0 1px 2px rgba(16,24,40,.04);}",
+        ".kpi-title{font-size:12px;color:#667085;margin-bottom:2px;}",
+        ".kpi-value{font-size:24px;font-weight:700;color:#101828;line-height:1.2;}",
+        ".dataTables_wrapper .dataTables_filter input{border-radius:8px;}",
+        sep=""
+      )))
     ),
     shiny::titlePanel("pkchk - NONMEM PK data review & checks"),
     shiny::div(class = "app-subtitle", "Upload ADPPK or generate CDISC-like dummy data from DM/EX/PC, then run configurable QC checks."),
@@ -98,11 +110,11 @@ run_app <- function() {
       pblq <- if ("BLQFL" %in% names(d)) round(100 * mean(toupper(as.character(d$BLQFL)) == "Y", na.rm = TRUE), 2) else NA
 
       shiny::div(
-        style = "display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;",
-        bslib::value_box(title = "Records", value = nrec, theme = bslib::value_box_theme(bg = "#e9f5ff", fg = "#0b4f7a")),
-        bslib::value_box(title = "Subjects", value = nsub, theme = bslib::value_box_theme(bg = "#eef9ef", fg = "#1c6b2a")),
-        bslib::value_box(title = "Periods", value = nper, theme = bslib::value_box_theme(bg = "#fff5e6", fg = "#8a4b00")),
-        bslib::value_box(title = "BLQ %", value = pblq, theme = bslib::value_box_theme(bg = "#f7efff", fg = "#5b2a86"))
+        class = "kpi-grid",
+        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "Records"), shiny::div(class = "kpi-value", format(nrec, big.mark = ","))),
+        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "Subjects"), shiny::div(class = "kpi-value", nsub)),
+        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "Periods"), shiny::div(class = "kpi-value", nper)),
+        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "BLQ %"), shiny::div(class = "kpi-value", pblq))
       )
     })
 
