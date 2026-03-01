@@ -7,7 +7,7 @@
 checks_registry()
 }
 \value{
-data.frame
+data.frame of check ids and labels.
 }
 \description{
 Available checks registry

@@ -4,22 +4,17 @@
 \alias{run_checks}
 \title{Run selected checks}
 \usage{
-run_checks(
-  adppk,
-  addose = data.frame(),
-  selected = c("required_vars", "name_label_len", "pk_no_dose", "poppk_consistency",
-    "char_num_mapping")
-)
+run_checks(adppk, addose = data.frame(), selected = checks_registry()$id)
 }
 \arguments{
 \item{adppk}{ADPPK data frame.}
 
 \item{addose}{ADDOSE data frame.}
 
-\item{selected}{character vector of check ids.}
+\item{selected}{Character vector of check ids.}
 }
 \value{
-List of check results.
+Named list of check results.
 }
 \description{
 Run selected checks
