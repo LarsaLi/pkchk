@@ -1,67 +1,106 @@
-#' Run the pkchk Shiny app
+#' Run the pkchk Shiny app (dashboard UI)
 #'
 #' @export
 run_app <- function() {
   reg <- checks_registry()
 
-  ui <- shiny::fluidPage(
-    theme = bslib::bs_theme(version = 5, bootswatch = "flatly"),
-    shiny::tags$head(
-      shiny::tags$style(shiny::HTML(paste(
-        ".app-subtitle{color:#5c6b73;margin-top:-8px;margin-bottom:14px;}",
-        ".btn{margin-right:6px;margin-bottom:6px;border-radius:10px;}",
-        ".well{border-radius:14px;border:1px solid #e6ebef;background:#fbfcfe;}",
-        ".nav-tabs{margin-bottom:14px;}",
-        ".nav-tabs>li>a{border-radius:10px 10px 0 0;}",
-        ".kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:12px;margin-bottom:14px;}",
-        ".kpi-card{background:#ffffff;border:1px solid #e5e9ef;border-radius:12px;padding:12px 14px;box-shadow:0 1px 2px rgba(16,24,40,.04);}",
-        ".kpi-title{font-size:12px;color:#667085;margin-bottom:2px;}",
-        ".kpi-value{font-size:24px;font-weight:700;color:#101828;line-height:1.2;}",
-        ".dataTables_wrapper .dataTables_filter input{border-radius:8px;}",
-        sep=""
-      )))
-    ),
-    shiny::titlePanel("pkchk - NONMEM PK data review & checks"),
-    shiny::div(class = "app-subtitle", "Upload ADPPK or generate CDISC-like dummy data from DM/EX/PC, then run configurable QC checks."),
-    shiny::sidebarLayout(
-      shiny::sidebarPanel(
-        shiny::h4("Data"),
-        shiny::fileInput("file_adppk", "Upload ADPPK (.csv/.xlsx)", accept = c(".csv", ".xlsx")),
-        shiny::fileInput("file_cfg", "Optional check config (.yml/.yaml)", accept = c(".yml", ".yaml")),
-        shiny::selectInput("study_type", "Dummy study type", choices = c("SAD", "MAD")),
-        shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
-        shiny::numericInput("period_n", "Periods", value = 1, min = 1, max = 10),
-        shiny::actionButton("gen_dummy", "Generate dummy ADPPK", class = "btn-primary"),
-        shiny::downloadButton("download_dummy_sources", "Download DM/EX/PC/ADPPK"),
-        shiny::hr(),
-        shiny::h4("Checks"),
-        shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
-        shiny::actionButton("select_all_checks", "Select all"),
-        shiny::actionButton("run_checks", "Run checks", class = "btn-success"),
-        shiny::hr(),
-        shiny::downloadButton("download_checks", "Download check summary (CSV)"),
-        shiny::downloadButton("download_report", "Download check report (HTML)")
+  ui <- shinydashboard::dashboardPage(
+    skin = "blue",
+    shinydashboard::dashboardHeader(title = "pkchk"),
+    shinydashboard::dashboardSidebar(
+      width = 320,
+      shinydashboard::sidebarMenu(
+        id = "tabs",
+        shinydashboard::menuItem("Data", tabName = "data", icon = shiny::icon("database")),
+        shinydashboard::menuItem("Summary", tabName = "summary", icon = shiny::icon("table")),
+        shinydashboard::menuItem("Visualization", tabName = "viz", icon = shiny::icon("chart-line")),
+        shinydashboard::menuItem("Checks", tabName = "checks", icon = shiny::icon("check-circle"))
       ),
-      shiny::mainPanel(
-        shiny::tabsetPanel(
-          shiny::tabPanel("Summary", shiny::uiOutput("kpi_cards"), DT::dataTableOutput("summary_dt"), DT::dataTableOutput("adppk_dt")),
-          shiny::tabPanel("Visualization", shiny::plotOutput("pk_plot", height = 320), shiny::plotOutput("arm_box_plot", height = 320)),
-          shiny::tabPanel("Checks", DT::dataTableOutput("check_result_dt"), DT::dataTableOutput("check_issue_dt"))
+      shiny::hr(),
+      shiny::h4("Data input"),
+      shiny::fileInput("file_adppk", "Upload ADPPK (.csv/.xlsx)", accept = c(".csv", ".xlsx")),
+      shiny::fileInput("file_cfg", "Optional check config (.yml/.yaml)", accept = c(".yml", ".yaml")),
+      shiny::selectInput("study_type", "Dummy study type", choices = c("SAD", "MAD")),
+      shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
+      shiny::numericInput("period_n", "Periods", value = 1, min = 1, max = 10),
+      shiny::actionButton("gen_dummy", "Generate dummy ADPPK", class = "btn-primary"),
+      shiny::downloadButton("download_dummy_sources", "Download DM/EX/PC/ADPPK"),
+      shiny::hr(),
+      shiny::h4("Checks"),
+      shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
+      shiny::actionButton("select_all_checks", "Select all"),
+      shiny::actionButton("run_checks", "Run checks", class = "btn-success"),
+      shiny::hr(),
+      shiny::downloadButton("download_checks", "Download check summary (CSV)"),
+      shiny::downloadButton("download_report", "Download check report (HTML)")
+    ),
+    shinydashboard::dashboardBody(
+      shiny::tags$head(
+        shiny::tags$style(shiny::HTML(
+          ".small-box .icon-large{font-size:36px; opacity:0.25;} .content-header{padding-bottom:2px;}"
+        ))
+      ),
+      shinydashboard::tabItems(
+        shinydashboard::tabItem(
+          tabName = "data",
+          shiny::fluidRow(
+            shinydashboard::box(
+              title = "Data status", width = 12, status = "primary", solidHeader = TRUE,
+              shiny::uiOutput("data_status")
+            )
+          )
+        ),
+        shinydashboard::tabItem(
+          tabName = "summary",
+          shiny::fluidRow(
+            shinydashboard::valueBoxOutput("vb_records", width = 3),
+            shinydashboard::valueBoxOutput("vb_subjects", width = 3),
+            shinydashboard::valueBoxOutput("vb_periods", width = 3),
+            shinydashboard::valueBoxOutput("vb_blq", width = 3)
+          ),
+          shiny::fluidRow(
+            shinydashboard::box(title = "Summary metrics", width = 4, status = "primary", solidHeader = TRUE,
+                                DT::dataTableOutput("summary_dt")),
+            shinydashboard::box(title = "ADPPK data review", width = 8, status = "primary", solidHeader = TRUE,
+                                DT::dataTableOutput("adppk_dt"))
+          )
+        ),
+        shinydashboard::tabItem(
+          tabName = "viz",
+          shiny::fluidRow(
+            shinydashboard::box(title = "PK profile", width = 6, status = "info", solidHeader = TRUE,
+                                shiny::plotOutput("pk_plot", height = 320)),
+            shinydashboard::box(title = "AVAL by ARM", width = 6, status = "info", solidHeader = TRUE,
+                                shiny::plotOutput("arm_box_plot", height = 320))
+          )
+        ),
+        shinydashboard::tabItem(
+          tabName = "checks",
+          shiny::fluidRow(
+            shinydashboard::box(title = "Check results", width = 12, status = "success", solidHeader = TRUE,
+                                DT::dataTableOutput("check_result_dt"))
+          ),
+          shiny::fluidRow(
+            shinydashboard::box(title = "Check issue details", width = 12, status = "warning", solidHeader = TRUE,
+                                DT::dataTableOutput("check_issue_dt"))
+          )
         )
       )
     )
   )
 
   server <- function(input, output, session) {
-    rv <- shiny::reactiveValues(adppk = NULL, addose = NULL, dm = NULL, ex = NULL, pc = NULL, check_out = NULL, cfg = load_check_config())
+    rv <- shiny::reactiveValues(
+      adppk = NULL, addose = NULL, dm = NULL, ex = NULL, pc = NULL,
+      check_out = NULL, cfg = load_check_config(), source = "none", last_update = NA_character_
+    )
 
     shiny::observeEvent(input$gen_dummy, {
       x <- generate_dummy_pk_package(study_type = input$study_type, n_subj = input$n_subj, period_n = input$period_n, seed = 123)
-      rv$dm <- x$dm
-      rv$ex <- x$ex
-      rv$pc <- x$pc
-      rv$adppk <- x$adppk
-      rv$addose <- x$addose
+      rv$dm <- x$dm; rv$ex <- x$ex; rv$pc <- x$pc
+      rv$adppk <- x$adppk; rv$addose <- x$addose
+      rv$source <- sprintf("dummy (%s, n=%s, periods=%s)", input$study_type, input$n_subj, input$period_n)
+      rv$last_update <- as.character(Sys.time())
       shiny::showNotification(sprintf("Dummy generated: %s records, %s subjects", nrow(rv$adppk), length(unique(rv$adppk$USUBJID))), type = "message")
     })
 
@@ -89,11 +128,14 @@ run_app <- function() {
         shiny::showNotification("Unsupported file format. Use .csv or .xlsx", type = "error")
         return()
       }
+
       rv$addose <- if (all(c("USUBJID", "DOSE") %in% names(rv$adppk))) {
         unique(rv$adppk[, intersect(c("USUBJID", "DOSE", "DOSEU", "ADY", "ROUTE"), names(rv$adppk)), drop = FALSE])
       } else {
         data.frame(USUBJID = unique(rv$adppk$USUBJID), stringsAsFactors = FALSE)
       }
+      rv$source <- sprintf("upload (%s)", input$file_adppk$name)
+      rv$last_update <- as.character(Sys.time())
       shiny::showNotification(sprintf("Uploaded ADPPK: %s rows, %s columns", nrow(rv$adppk), ncol(rv$adppk)), type = "message")
     })
 
@@ -101,21 +143,40 @@ run_app <- function() {
       shiny::updateCheckboxGroupInput(session, "checks", selected = reg$id)
     })
 
-    output$kpi_cards <- shiny::renderUI({
-      shiny::req(rv$adppk)
-      d <- rv$adppk
-      nrec <- nrow(d)
-      nsub <- if ("USUBJID" %in% names(d)) length(unique(d$USUBJID)) else NA
-      nper <- if ("APERIOD" %in% names(d)) length(unique(stats::na.omit(d$APERIOD))) else NA
-      pblq <- if ("BLQFL" %in% names(d)) round(100 * mean(toupper(as.character(d$BLQFL)) == "Y", na.rm = TRUE), 2) else NA
+    output$data_status <- shiny::renderUI({
+      if (is.null(rv$adppk)) {
+        shiny::tags$div("No dataset loaded yet. Upload ADPPK or generate dummy data.")
+      } else {
+        shiny::tags$ul(
+          shiny::tags$li(sprintf("Source: %s", rv$source)),
+          shiny::tags$li(sprintf("Records: %s", nrow(rv$adppk))),
+          shiny::tags$li(sprintf("Columns: %s", ncol(rv$adppk))),
+          shiny::tags$li(sprintf("Last update: %s", rv$last_update))
+        )
+      }
+    })
 
-      shiny::div(
-        class = "kpi-grid",
-        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "Records"), shiny::div(class = "kpi-value", format(nrec, big.mark = ","))),
-        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "Subjects"), shiny::div(class = "kpi-value", nsub)),
-        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "Periods"), shiny::div(class = "kpi-value", nper)),
-        shiny::div(class = "kpi-card", shiny::div(class = "kpi-title", "BLQ %"), shiny::div(class = "kpi-value", pblq))
-      )
+    output$vb_records <- shinydashboard::renderValueBox({
+      shiny::req(rv$adppk)
+      shinydashboard::valueBox(format(nrow(rv$adppk), big.mark = ","), "Records", icon = shiny::icon("table"), color = "aqua")
+    })
+
+    output$vb_subjects <- shinydashboard::renderValueBox({
+      shiny::req(rv$adppk)
+      nsub <- if ("USUBJID" %in% names(rv$adppk)) length(unique(rv$adppk$USUBJID)) else NA
+      shinydashboard::valueBox(nsub, "Subjects", icon = shiny::icon("users"), color = "green")
+    })
+
+    output$vb_periods <- shinydashboard::renderValueBox({
+      shiny::req(rv$adppk)
+      nper <- if ("APERIOD" %in% names(rv$adppk)) length(unique(stats::na.omit(rv$adppk$APERIOD))) else NA
+      shinydashboard::valueBox(nper, "Periods", icon = shiny::icon("layer-group"), color = "yellow")
+    })
+
+    output$vb_blq <- shinydashboard::renderValueBox({
+      shiny::req(rv$adppk)
+      pblq <- if ("BLQFL" %in% names(rv$adppk)) round(100 * mean(toupper(as.character(rv$adppk$BLQFL)) == "Y", na.rm = TRUE), 2) else NA
+      shinydashboard::valueBox(paste0(pblq, "%"), "BLQ", icon = shiny::icon("flask"), color = "purple")
     })
 
     output$summary_dt <- DT::renderDataTable({
@@ -143,26 +204,37 @@ run_app <- function() {
 
     output$adppk_dt <- DT::renderDataTable({
       shiny::req(rv$adppk)
-      DT::datatable(rv$adppk, filter = "top", options = list(pageLength = 25, scrollX = TRUE, autoWidth = TRUE), rownames = FALSE)
+      DT::datatable(rv$adppk, filter = "top", options = list(pageLength = 20, scrollX = TRUE, autoWidth = TRUE), rownames = FALSE)
     })
 
     output$pk_plot <- shiny::renderPlot({
       shiny::req(rv$adppk)
       d <- rv$adppk
-      if (!all(c("ATPTN", "AVAL") %in% names(d))) return(invisible(NULL))
-      graphics::plot(as.numeric(d$ATPTN), as.numeric(d$AVAL), pch = 19, col = "#2C7FB8", xlab = "ATPTN", ylab = "AVAL", main = "PK profile (all records)")
+      if (!all(c("ATPTN", "AVAL") %in% names(d))) {
+        graphics::plot.new(); graphics::text(0.5, 0.5, "ATPTN/AVAL not available")
+        return(invisible(NULL))
+      }
+      idx <- which(!is.na(d$ATPTN) & !is.na(d$AVAL) & d$EVID == 0)
+      if (length(idx) == 0) { graphics::plot.new(); graphics::text(0.5, 0.5, "No EVID=0 observation records"); return(invisible(NULL)) }
+      graphics::plot(as.numeric(d$ATPTN[idx]), as.numeric(d$AVAL[idx]), pch = 19, col = "#2C7FB8", xlab = "ATPTN", ylab = "AVAL", main = "PK profile (EVID=0)")
     })
 
     output$arm_box_plot <- shiny::renderPlot({
       shiny::req(rv$adppk)
       d <- rv$adppk
-      if (!all(c("ARM", "AVAL") %in% names(d))) return(invisible(NULL))
-      graphics::boxplot(as.numeric(AVAL) ~ ARM, data = d, col = "#A6CEE3", main = "AVAL by ARM", ylab = "AVAL")
+      if (!all(c("ARM", "AVAL") %in% names(d))) {
+        graphics::plot.new(); graphics::text(0.5, 0.5, "ARM/AVAL not available")
+        return(invisible(NULL))
+      }
+      idx <- which(!is.na(d$ARM) & !is.na(d$AVAL) & d$EVID == 0)
+      if (length(idx) == 0) { graphics::plot.new(); graphics::text(0.5, 0.5, "No EVID=0 observation records"); return(invisible(NULL)) }
+      graphics::boxplot(as.numeric(AVAL) ~ ARM, data = d[idx, , drop = FALSE], col = "#A6CEE3", main = "AVAL by ARM", ylab = "AVAL")
     })
 
     shiny::observeEvent(input$run_checks, {
       shiny::req(rv$adppk)
       rv$check_out <- run_checks(rv$adppk, rv$addose, selected = input$checks, cfg = rv$cfg)
+      shiny::showNotification("Checks completed", type = "message")
     })
 
     result_table <- shiny::reactive({
@@ -192,8 +264,7 @@ run_app <- function() {
         utils::write.csv(rv$ex, f_ex, row.names = FALSE)
         utils::write.csv(rv$pc, f_pc, row.names = FALSE)
         utils::write.csv(rv$adppk, f_ad, row.names = FALSE)
-        owd <- getwd()
-        on.exit(setwd(owd), add = TRUE)
+        owd <- getwd(); on.exit(setwd(owd), add = TRUE)
         setwd(td)
         utils::zip(zipfile = file, files = c("DM.csv", "EX.csv", "PC.csv", "ADPPK.csv"))
       }
