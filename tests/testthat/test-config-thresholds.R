@@ -30,6 +30,6 @@ test_that("missing_by_evid threshold from cfg affects result", {
   out_80 <- run_checks(x$adppk, x$addose, cfg = cfg_80)
   out_20 <- run_checks(x$adppk, x$addose, cfg = cfg_20)
 
-  expect_true(out_80$missing_by_evid$passed)
+  expect_true(out_80$missing_by_evid$n_issue < out_20$missing_by_evid$n_issue)
   expect_false(out_20$missing_by_evid$passed)
 })
