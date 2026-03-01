@@ -14,6 +14,7 @@ run_app <- function() {
         shiny::selectInput("study_type", "Or generate dummy study type", choices = c("SAD", "MAD")),
         shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
         shiny::actionButton("gen_dummy", "Generate dummy ADPPK"),
+        shiny::actionButton("load_example", "Load built-in example"),
         shiny::hr(),
         shiny::h4("Checks"),
         shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
@@ -39,6 +40,20 @@ run_app <- function() {
       x <- generate_dummy_adppk(study_type = input$study_type, n_subj = input$n_subj, seed = 123)
       rv$adppk <- x$adppk
       rv$addose <- x$addose
+    })
+
+    shiny::observeEvent(input$load_example, {
+      ex <- system.file("extdata", "example_adppk.csv", package = "pkchk")
+      if (!nzchar(ex)) {
+        shiny::showNotification("No built-in example found", type = "error")
+        return()
+      }
+      rv$adppk <- utils::read.csv(ex, stringsAsFactors = FALSE)
+      rv$addose <- if (all(c("USUBJID", "DOSE") %in% names(rv$adppk))) {
+        unique(rv$adppk[, intersect(c("USUBJID", "DOSE", "DOSEU", "ADY", "ROUTE"), names(rv$adppk)), drop = FALSE])
+      } else {
+        data.frame(USUBJID = unique(rv$adppk$USUBJID), stringsAsFactors = FALSE)
+      }
     })
 
     shiny::observeEvent(input$file_adppk, {
@@ -99,28 +114,14 @@ run_app <- function() {
 
     result_table <- shiny::reactive({
       shiny::req(rv$check_out)
-      do.call(rbind, lapply(rv$check_out, function(x) {
-        data.frame(
-          check_id = x$check_id,
-          passed = x$passed,
-          n_issue = x$n_issue,
-          message = x$message,
-          stringsAsFactors = FALSE
-        )
-      }))
+      checks_to_summary(rv$check_out)
     })
 
     output$check_result_tbl <- shiny::renderTable({ result_table() })
 
     output$check_issue_tbl <- shiny::renderTable({
       shiny::req(rv$check_out)
-      tabs <- lapply(rv$check_out, function(x) {
-        if (is.null(x$issue_table) || nrow(x$issue_table) == 0) return(NULL)
-        cbind(check_id = x$check_id, x$issue_table, stringsAsFactors = FALSE)
-      })
-      tabs <- Filter(Negate(is.null), tabs)
-      if (length(tabs) == 0) return(data.frame(info = "No issues found", stringsAsFactors = FALSE))
-      do.call(rbind, tabs)
+      checks_to_issues(rv$check_out)
     })
 
     output$download_checks <- shiny::downloadHandler(
@@ -134,30 +135,7 @@ run_app <- function() {
       filename = function() paste0("pkchk_checklist_report_", Sys.Date(), ".html"),
       content = function(file) {
         shiny::req(rv$check_out)
-        res <- result_table()
-        pass_n <- sum(res$passed, na.rm = TRUE)
-        fail_n <- sum(!res$passed, na.rm = TRUE)
-        html <- c(
-          "<html><head><meta charset='utf-8'><title>pkchk checklist report</title></head><body>",
-          sprintf("<h1>pkchk checklist report</h1><p>Date: %s</p>", Sys.Date()),
-          sprintf("<p>Records: %s | Subjects: %s | Pass: %s | Fail: %s</p>",
-                  nrow(rv$adppk),
-                  if ("USUBJID" %in% names(rv$adppk)) length(unique(rv$adppk$USUBJID)) else NA,
-                  pass_n, fail_n),
-          "<h2>Summary</h2>",
-          paste(utils::capture.output(print(res, row.names = FALSE)), collapse = "<br/>"),
-          "<h2>Issues</h2>"
-        )
-
-        for (nm in names(rv$check_out)) {
-          x <- rv$check_out[[nm]]
-          html <- c(html, sprintf("<h3>%s</h3><p>%s</p>", x$check_id, x$message))
-          if (!is.null(x$issue_table) && nrow(x$issue_table) > 0) {
-            html <- c(html, "<pre>", paste(utils::capture.output(print(x$issue_table, row.names = FALSE)), collapse = "\n"), "</pre>")
-          }
-        }
-        html <- c(html, "</body></html>")
-        writeLines(html, file)
+        generate_check_report_html(rv$adppk, rv$check_out, file)
       }
     )
   }

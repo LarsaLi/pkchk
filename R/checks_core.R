@@ -640,6 +640,19 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
   if ("time_sequential" %in% selected) out[["time_sequential"]] <- check_time_sequential(adppk)
   if ("cross_study_alignment" %in% selected) out[["cross_study_alignment"]] <- check_cross_study_alignment(adppk)
   if ("standardized_values" %in% selected) out[["standardized_values"]] <- check_standardized_values(adppk)
+
+  sev_map <- c(
+    required_vars = "error", name_label_len = "error", pk_no_dose = "error", poppk_consistency = "error",
+    char_num_mapping = "error", char_truncation = "warn", fixed_covariates = "warn", predose_time = "error",
+    sampling_dev_10pct = "warn", unexpected_values = "warn", covariate_outliers = "warn",
+    nominal_actual_deviation = "warn", nominal_actual_consistency = "warn", missing_by_evid = "info",
+    duplicates = "error", expected_ranges = "error", bloq_middle = "warn", high_predose = "warn",
+    amt_for_dose = "error", mdv_assignment = "error", evid4_once = "warn", time_sequential = "error",
+    cross_study_alignment = "warn", standardized_values = "info"
+  )
+  for (nm in names(out)) {
+    out[[nm]]$severity <- if (is.null(sev_map[[nm]])) "error" else unname(sev_map[[nm]])
+  }
   out
 }
 

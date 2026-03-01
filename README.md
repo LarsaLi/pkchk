@@ -8,10 +8,11 @@
 ## Current MVP
 
 - Generate dummy ADPPK data (`SAD` / `MAD`)
-- Upload ADPPK (`.csv`)
+- Upload ADPPK (`.csv` / `.xlsx`) or load built-in example data
 - Run modular checks (each check is an independent function)
 - View summary and basic visualization
 - Export checklist summary report (`.csv`)
+- Export checklist report (`.html`) with severity levels (`error` / `warn` / `info`)
 
 ## Installation
 
