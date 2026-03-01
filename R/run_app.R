@@ -11,6 +11,7 @@ run_app <- function() {
       shiny::sidebarPanel(
         shiny::h4("Data input"),
         shiny::fileInput("file_adppk", "Upload ADPPK (.csv/.xlsx)", accept = c(".csv", ".xlsx")),
+        shiny::fileInput("file_cfg", "Optional check config (.yml/.yaml)", accept = c(".yml", ".yaml")),
         shiny::selectInput("study_type", "Or generate dummy study type", choices = c("SAD", "MAD")),
         shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
         shiny::actionButton("gen_dummy", "Generate dummy ADPPK"),
@@ -34,7 +35,7 @@ run_app <- function() {
   )
 
   server <- function(input, output, session) {
-    rv <- shiny::reactiveValues(adppk = NULL, addose = NULL, check_out = NULL)
+    rv <- shiny::reactiveValues(adppk = NULL, addose = NULL, check_out = NULL, cfg = load_check_config())
 
     shiny::observeEvent(input$gen_dummy, {
       x <- generate_dummy_adppk(study_type = input$study_type, n_subj = input$n_subj, seed = 123)
@@ -54,6 +55,19 @@ run_app <- function() {
       } else {
         data.frame(USUBJID = unique(rv$adppk$USUBJID), stringsAsFactors = FALSE)
       }
+    })
+
+    shiny::observeEvent(input$file_cfg, {
+      shiny::req(input$file_cfg)
+      ext <- tolower(tools::file_ext(input$file_cfg$name))
+      if (!ext %in% c("yml", "yaml")) {
+        shiny::showNotification("Config must be .yml/.yaml", type = "error")
+        return()
+      }
+      rv$cfg <- load_check_config(input$file_cfg$datapath)
+      ids <- enabled_checks(rv$cfg)
+      shiny::updateCheckboxGroupInput(session, "checks", selected = ids)
+      shiny::showNotification(sprintf("Config loaded: %s checks enabled", length(ids)), type = "message")
     })
 
     shiny::observeEvent(input$file_adppk, {
@@ -109,7 +123,7 @@ run_app <- function() {
 
     shiny::observeEvent(input$run_checks, {
       shiny::req(rv$adppk)
-      rv$check_out <- run_checks(rv$adppk, rv$addose, selected = input$checks)
+      rv$check_out <- run_checks(rv$adppk, rv$addose, selected = input$checks, cfg = rv$cfg)
     })
 
     result_table <- shiny::reactive({

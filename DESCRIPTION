@@ -15,4 +15,5 @@ Config/testthat/edition: 3
 Imports: 
     bslib,
     readxl,
-    shiny
+    shiny,
+    yaml

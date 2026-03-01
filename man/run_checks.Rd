@@ -4,7 +4,12 @@
 \alias{run_checks}
 \title{Run selected checks}
 \usage{
-run_checks(adppk, addose = data.frame(), selected = checks_registry()$id)
+run_checks(
+  adppk,
+  addose = data.frame(),
+  selected = checks_registry()$id,
+  cfg = NULL
+)
 }
 \arguments{
 \item{adppk}{ADPPK data frame.}
@@ -12,6 +17,8 @@ run_checks(adppk, addose = data.frame(), selected = checks_registry()$id)
 \item{addose}{ADDOSE data frame.}
 
 \item{selected}{Character vector of check ids.}
+
+\item{cfg}{Optional check config list from \code{load_check_config()}.}
 }
 \value{
 Named list of check results.

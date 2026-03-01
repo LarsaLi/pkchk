@@ -612,9 +612,14 @@ check_standardized_values <- function(adppk) {
 #' @param adppk ADPPK data frame.
 #' @param addose ADDOSE data frame.
 #' @param selected Character vector of check ids.
+#' @param cfg Optional check config list from `load_check_config()`.
 #' @return Named list of check results.
 #' @export
-run_checks <- function(adppk, addose = data.frame(), selected = checks_registry()$id) {
+run_checks <- function(adppk, addose = data.frame(), selected = checks_registry()$id, cfg = NULL) {
+  if (!is.null(cfg)) {
+    selected <- enabled_checks(cfg)
+  }
+
   out <- list()
   if ("required_vars" %in% selected) out[["required_vars"]] <- check_required_vars(adppk)
   if ("name_label_len" %in% selected) out[["name_label_len"]] <- check_name_label_len(adppk)
@@ -650,6 +655,11 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
     amt_for_dose = "error", mdv_assignment = "error", evid4_once = "warn", time_sequential = "error",
     cross_study_alignment = "warn", standardized_values = "info"
   )
+  if (!is.null(cfg)) {
+    ov <- severity_overrides(cfg)
+    for (k in names(ov)) sev_map[[k]] <- ov[[k]]
+  }
+
   for (nm in names(out)) {
     out[[nm]]$severity <- if (is.null(sev_map[[nm]])) "error" else unname(sev_map[[nm]])
   }

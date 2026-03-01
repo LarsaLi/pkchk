@@ -13,6 +13,8 @@
 - View summary and basic visualization
 - Export checklist summary report (`.csv`)
 - Export checklist report (`.html`) with severity levels (`error` / `warn` / `info`)
+- YAML-driven check profile (`inst/config/checks_default.yml`)
+- Checklist-to-function mapping doc (`inst/extdata/checklist_mapping.md`)
 
 ## Installation
 

@@ -1,0 +1,79 @@
+version: 1
+profile: default
+checks:
+  required_vars:
+    enabled: true
+    severity: error
+  name_label_len:
+    enabled: true
+    severity: error
+  pk_no_dose:
+    enabled: true
+    severity: error
+  poppk_consistency:
+    enabled: true
+    severity: error
+  char_num_mapping:
+    enabled: true
+    severity: error
+  char_truncation:
+    enabled: true
+    severity: warn
+  fixed_covariates:
+    enabled: true
+    severity: warn
+  predose_time:
+    enabled: true
+    severity: error
+  sampling_dev_10pct:
+    enabled: true
+    severity: warn
+    threshold_pct: 10
+  unexpected_values:
+    enabled: true
+    severity: warn
+  covariate_outliers:
+    enabled: true
+    severity: warn
+  nominal_actual_deviation:
+    enabled: true
+    severity: warn
+    abs_dev_threshold: 2
+  nominal_actual_consistency:
+    enabled: true
+    severity: warn
+  missing_by_evid:
+    enabled: true
+    severity: info
+    high_missing_threshold_pct: 20
+  duplicates:
+    enabled: true
+    severity: error
+  expected_ranges:
+    enabled: true
+    severity: error
+  bloq_middle:
+    enabled: true
+    severity: warn
+  high_predose:
+    enabled: true
+    severity: warn
+    predose_ratio_threshold: 0.2
+  amt_for_dose:
+    enabled: true
+    severity: error
+  mdv_assignment:
+    enabled: true
+    severity: error
+  evid4_once:
+    enabled: true
+    severity: warn
+  time_sequential:
+    enabled: true
+    severity: error
+  cross_study_alignment:
+    enabled: true
+    severity: warn
+  standardized_values:
+    enabled: true
+    severity: info
