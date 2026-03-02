@@ -723,7 +723,8 @@ check_standardized_values <- function(adppk) {
 #' @export
 run_checks <- function(adppk, addose = data.frame(), selected = checks_registry()$id, cfg = NULL) {
   if (!is.null(cfg)) {
-    selected <- enabled_checks(cfg)
+    # Respect UI/user-selected checks; config acts as allowed-set filter.
+    selected <- intersect(selected, enabled_checks(cfg))
   }
 
   out <- list()
