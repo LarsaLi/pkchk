@@ -1,79 +1,121 @@
-version: 1
+version: 2
 profile: default
+
+time_semantics:
+  time_unit: hour
+  time_anchor: first_dose
+  period_anchor: first_dose_in_period
+
 checks:
   required_vars:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.1.0
   name_label_len:
     enabled: true
     severity: error
+    rule_version: 1.0.0
   pk_no_dose:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.0.0
   poppk_consistency:
     enabled: true
     severity: error
+    rule_version: 1.0.0
   char_num_mapping:
     enabled: true
     severity: error
+    rule_version: 1.0.0
   char_truncation:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   fixed_covariates:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   predose_time:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.1.0
   sampling_dev_10pct:
     enabled: true
     severity: warn
     threshold_pct: 10
+    rule_version: 1.1.0
   unexpected_values:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   covariate_outliers:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   nominal_actual_deviation:
     enabled: true
     severity: warn
     abs_dev_threshold: 2
+    rule_version: 1.1.0
   nominal_actual_consistency:
     enabled: true
     severity: warn
+    rule_version: 1.1.0
   missing_by_evid:
     enabled: true
     severity: info
     high_missing_threshold_pct: 20
+    rule_version: 1.0.0
   duplicates:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.0.0
   expected_ranges:
     enabled: true
     severity: error
+    rule_version: 1.0.0
   bloq_middle:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   high_predose:
     enabled: true
     severity: warn
     predose_ratio_threshold: 0.2
+    rule_version: 1.0.0
   amt_for_dose:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.0.0
   mdv_assignment:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.1.0
   evid4_once:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   time_sequential:
     enabled: true
-    severity: error
+    severity: model_blocker
+    rule_version: 1.0.0
+  event_ordering:
+    enabled: true
+    severity: model_blocker
+    rule_version: 1.0.0
+  obs_has_prior_dose:
+    enabled: true
+    severity: model_blocker
+    rule_version: 1.0.0
+  time_anchor_consistency:
+    enabled: true
+    severity: model_blocker
+    rule_version: 1.0.0
   cross_study_alignment:
     enabled: true
     severity: warn
+    rule_version: 1.0.0
   standardized_values:
     enabled: true
     severity: info
+    rule_version: 1.0.0

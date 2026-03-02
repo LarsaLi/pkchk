@@ -6,6 +6,7 @@ checks_to_summary <- function(check_out) {
   do.call(rbind, lapply(check_out, function(x) {
     data.frame(
       check_id = x$check_id,
+      rule_version = if (!is.null(x$rule_version)) x$rule_version else "1.0.0",
       severity = if (!is.null(x$severity)) x$severity else "error",
       status = if (!is.null(x$status)) x$status else if (isTRUE(x$passed)) "pass" else "fail",
       passed = x$passed,
@@ -82,7 +83,10 @@ generate_check_report_html <- function(adppk, check_out, file, cfg = NULL) {
   skip_n <- sum(res$status == "skip", na.rm = TRUE)
 
   pkg_ver <- as.character(utils::packageVersion("pkchk"))
-  git_sha <- tryCatch(system2("git", c("rev-parse", "--short", "HEAD"), stdout = TRUE, stderr = FALSE)[1], error = function(e) "NA")
+  git_sha <- "NA"
+  if (dir.exists(".git")) {
+    git_sha <- tryCatch(suppressWarnings(system2("git", c("rev-parse", "--short", "HEAD"), stdout = TRUE, stderr = FALSE)[1]), error = function(e) "NA")
+  }
 
   html <- c(
     "<html><head><meta charset='utf-8'><title>pkchk checklist report</title>\n",
@@ -108,10 +112,20 @@ generate_check_report_html <- function(adppk, check_out, file, cfg = NULL) {
     html <- c(html, "<h2>Effective configuration</h2>",
               sprintf("<p>Profile: %s | Version: %s</p>",
                       ifelse(is.null(cfg$profile), "NA", cfg$profile),
-                      ifelse(is.null(cfg$version), "NA", cfg$version)),
-              "<pre>")
-    cfg_txt <- utils::capture.output(utils::str(cfg$checks, give.attr = FALSE))
-    html <- c(html, paste(cfg_txt, collapse = "\n"), "</pre>")
+                      ifelse(is.null(cfg$version), "NA", cfg$version)))
+
+    ids <- names(cfg$checks)
+    html <- c(html, "<table><tr><th>check_id</th><th>enabled</th><th>severity</th><th>rule_version</th><th>thresholds</th></tr>")
+    for (id in ids) {
+      cki <- cfg$checks[[id]]
+      en <- ifelse(is.null(cki$enabled), NA, cki$enabled)
+      sev <- ifelse(is.null(cki$severity), "error", cki$severity)
+      rv <- ifelse(is.null(cki$rule_version), "1.0.0", cki$rule_version)
+      thr <- cki[setdiff(names(cki), c("enabled", "severity", "rule_version"))]
+      thr_txt <- if (length(thr) == 0) "" else paste(names(thr), unlist(thr), sep = "=", collapse = "; ")
+      html <- c(html, sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>", id, en, sev, rv, thr_txt))
+    }
+    html <- c(html, "</table>")
   }
 
   html <- c(html, "<h2>Issue details</h2>")

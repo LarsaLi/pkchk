@@ -6,8 +6,9 @@ test_that("sampling deviation threshold from cfg affects result", {
   idx <- seq_len(min(4, nrow(x$adppk)))
   x$adppk$TIME[idx] <- x$adppk$NTIME[idx] * 1.15
 
-  cfg_loose <- list(checks = list(sampling_dev_10pct = list(enabled = TRUE, severity = "warn", threshold_pct = 20)))
-  cfg_strict <- list(checks = list(sampling_dev_10pct = list(enabled = TRUE, severity = "warn", threshold_pct = 5)))
+  ts <- list(time_unit = "hour", time_anchor = "first_dose", period_anchor = "first_dose_in_period")
+  cfg_loose <- list(time_semantics = ts, checks = list(sampling_dev_10pct = list(enabled = TRUE, severity = "warn", threshold_pct = 20)))
+  cfg_strict <- list(time_semantics = ts, checks = list(sampling_dev_10pct = list(enabled = TRUE, severity = "warn", threshold_pct = 5)))
 
   out_loose <- run_checks(x$adppk, x$addose, cfg = cfg_loose)
   out_strict <- run_checks(x$adppk, x$addose, cfg = cfg_strict)

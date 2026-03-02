@@ -1,0 +1,16 @@
+version: 1
+profile: mad_sparse
+time_semantics:
+  time_unit: hour
+  time_anchor: first_dose
+  period_anchor: first_dose_in_period
+checks:
+  required_vars: { enabled: true, severity: model_blocker, rule_version: 1.1.0 }
+  pk_no_dose: { enabled: true, severity: model_blocker, rule_version: 1.0.0 }
+  event_ordering: { enabled: true, severity: model_blocker, rule_version: 1.0.0 }
+  obs_has_prior_dose: { enabled: true, severity: model_blocker, rule_version: 1.0.0 }
+  time_anchor_consistency: { enabled: true, severity: model_blocker, rule_version: 1.0.0 }
+  mdv_assignment: { enabled: true, severity: model_blocker, rule_version: 1.1.0 }
+  sampling_dev_10pct: { enabled: true, severity: warn, threshold_pct: 20, rule_version: 1.1.0 }
+  missing_by_evid: { enabled: true, severity: info, high_missing_threshold_pct: 30, rule_version: 1.0.0 }
+  high_predose: { enabled: true, severity: warn, predose_ratio_threshold: 0.3, rule_version: 1.0.0 }

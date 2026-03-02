@@ -9,12 +9,13 @@ run_check_with_cfg <- function(fn, args, cfg_item = NULL) {
   extra <- list()
   if (!is.null(cfg_item) && is.list(cfg_item)) {
     for (nm in names(cfg_item)) {
-      if (nm %in% c("enabled", "severity")) next
+      if (nm %in% c("enabled", "severity", "rule_version")) next
       if (nm %in% fn_formals) extra[[nm]] <- cfg_item[[nm]]
     }
   }
 
   out <- do.call(fn, c(args, extra))
+  out$rule_version <- if (!is.null(cfg_item) && !is.null(cfg_item$rule_version)) as.character(cfg_item$rule_version) else "1.0.0"
 
   # Unified status field for downstream reporting
   msg <- if (!is.null(out$message)) tolower(out$message) else ""

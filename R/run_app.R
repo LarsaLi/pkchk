@@ -317,12 +317,12 @@ run_app <- function() {
     output$check_result_dt <- DT::renderDataTable({
       x <- result_table_view()
       DT::datatable(
-        x[, c("check_id", "severity", "status", "n_issue_view", "message")],
+        x[, c("check_id", "rule_version", "severity", "status", "n_issue_view", "message")],
         escape = FALSE,
         options = list(
           pageLength = 15,
           scrollX = TRUE,
-          columnDefs = list(list(targets = 3, title = "n_issue"))
+          columnDefs = list(list(targets = 4, title = "n_issue"))
         ),
         rownames = FALSE,
         selection = "single",

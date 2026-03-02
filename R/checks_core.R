@@ -15,6 +15,12 @@
   list(check_id = check_id, passed = TRUE, n_issue = 0, message = message, issue_table = data.frame())
 }
 
+.skip_result <- function(check_id, message = "Skipped") {
+  out <- .pass_result(check_id, message)
+  out$status <- "skip"
+  out
+}
+
 # checks ---------------------------------------------------------------
 
 #' Check required ADPPK variables
@@ -722,9 +728,11 @@ check_standardized_values <- function(adppk) {
 #' @return Named list of check results.
 #' @export
 run_checks <- function(adppk, addose = data.frame(), selected = checks_registry()$id, cfg = NULL) {
+  ts_valid <- list(ok = TRUE, message = "ok")
   if (!is.null(cfg)) {
     # Respect UI/user-selected checks; config acts as allowed-set filter.
     selected <- intersect(selected, enabled_checks(cfg))
+    ts_valid <- validate_time_semantics(cfg)
   }
 
   out <- list()
@@ -740,12 +748,12 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
   if ("char_num_mapping" %in% selected) out[["char_num_mapping"]] <- run_check_with_cfg(check_char_num_mapping, list(adppk = adppk), cfg_item("char_num_mapping"))
   if ("char_truncation" %in% selected) out[["char_truncation"]] <- run_check_with_cfg(check_char_truncation, list(adppk = adppk), cfg_item("char_truncation"))
   if ("fixed_covariates" %in% selected) out[["fixed_covariates"]] <- run_check_with_cfg(check_fixed_covariates, list(adppk = adppk), cfg_item("fixed_covariates"))
-  if ("predose_time" %in% selected) out[["predose_time"]] <- run_check_with_cfg(check_predose_time, list(adppk = adppk), cfg_item("predose_time"))
-  if ("sampling_dev_10pct" %in% selected) out[["sampling_dev_10pct"]] <- run_check_with_cfg(check_sampling_deviation, list(adppk = adppk), cfg_item("sampling_dev_10pct"))
+  if ("predose_time" %in% selected) out[["predose_time"]] <- if (ts_valid$ok) run_check_with_cfg(check_predose_time, list(adppk = adppk), cfg_item("predose_time")) else .skip_result("predose_time", paste("Skipped:", ts_valid$message))
+  if ("sampling_dev_10pct" %in% selected) out[["sampling_dev_10pct"]] <- if (ts_valid$ok) run_check_with_cfg(check_sampling_deviation, list(adppk = adppk), cfg_item("sampling_dev_10pct")) else .skip_result("sampling_dev_10pct", paste("Skipped:", ts_valid$message))
   if ("unexpected_values" %in% selected) out[["unexpected_values"]] <- run_check_with_cfg(check_unexpected_values, list(adppk = adppk), cfg_item("unexpected_values"))
   if ("covariate_outliers" %in% selected) out[["covariate_outliers"]] <- run_check_with_cfg(check_covariate_outliers, list(adppk = adppk), cfg_item("covariate_outliers"))
-  if ("nominal_actual_deviation" %in% selected) out[["nominal_actual_deviation"]] <- run_check_with_cfg(check_nominal_actual_deviation, list(adppk = adppk), cfg_item("nominal_actual_deviation"))
-  if ("nominal_actual_consistency" %in% selected) out[["nominal_actual_consistency"]] <- run_check_with_cfg(check_nominal_actual_consistency, list(adppk = adppk), cfg_item("nominal_actual_consistency"))
+  if ("nominal_actual_deviation" %in% selected) out[["nominal_actual_deviation"]] <- if (ts_valid$ok) run_check_with_cfg(check_nominal_actual_deviation, list(adppk = adppk), cfg_item("nominal_actual_deviation")) else .skip_result("nominal_actual_deviation", paste("Skipped:", ts_valid$message))
+  if ("nominal_actual_consistency" %in% selected) out[["nominal_actual_consistency"]] <- if (ts_valid$ok) run_check_with_cfg(check_nominal_actual_consistency, list(adppk = adppk), cfg_item("nominal_actual_consistency")) else .skip_result("nominal_actual_consistency", paste("Skipped:", ts_valid$message))
   if ("missing_by_evid" %in% selected) out[["missing_by_evid"]] <- run_check_with_cfg(check_missing_by_evid, list(adppk = adppk), cfg_item("missing_by_evid"))
   if ("duplicates" %in% selected) out[["duplicates"]] <- run_check_with_cfg(check_duplicates, list(adppk = adppk), cfg_item("duplicates"))
   if ("expected_ranges" %in% selected) out[["expected_ranges"]] <- run_check_with_cfg(check_expected_ranges, list(adppk = adppk), cfg_item("expected_ranges"))
@@ -754,10 +762,10 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
   if ("amt_for_dose" %in% selected) out[["amt_for_dose"]] <- run_check_with_cfg(check_amt_for_dose, list(adppk = adppk), cfg_item("amt_for_dose"))
   if ("mdv_assignment" %in% selected) out[["mdv_assignment"]] <- run_check_with_cfg(check_mdv_assignment, list(adppk = adppk), cfg_item("mdv_assignment"))
   if ("evid4_once" %in% selected) out[["evid4_once"]] <- run_check_with_cfg(check_evid4_once, list(adppk = adppk), cfg_item("evid4_once"))
-  if ("time_sequential" %in% selected) out[["time_sequential"]] <- run_check_with_cfg(check_time_sequential, list(adppk = adppk), cfg_item("time_sequential"))
-  if ("event_ordering" %in% selected) out[["event_ordering"]] <- run_check_with_cfg(check_event_ordering, list(adppk = adppk), cfg_item("event_ordering"))
-  if ("obs_has_prior_dose" %in% selected) out[["obs_has_prior_dose"]] <- run_check_with_cfg(check_obs_has_prior_dose, list(adppk = adppk), cfg_item("obs_has_prior_dose"))
-  if ("time_anchor_consistency" %in% selected) out[["time_anchor_consistency"]] <- run_check_with_cfg(check_time_anchor_consistency, list(adppk = adppk), cfg_item("time_anchor_consistency"))
+  if ("time_sequential" %in% selected) out[["time_sequential"]] <- if (ts_valid$ok) run_check_with_cfg(check_time_sequential, list(adppk = adppk), cfg_item("time_sequential")) else .skip_result("time_sequential", paste("Skipped:", ts_valid$message))
+  if ("event_ordering" %in% selected) out[["event_ordering"]] <- if (ts_valid$ok) run_check_with_cfg(check_event_ordering, list(adppk = adppk), cfg_item("event_ordering")) else .skip_result("event_ordering", paste("Skipped:", ts_valid$message))
+  if ("obs_has_prior_dose" %in% selected) out[["obs_has_prior_dose"]] <- if (ts_valid$ok) run_check_with_cfg(check_obs_has_prior_dose, list(adppk = adppk), cfg_item("obs_has_prior_dose")) else .skip_result("obs_has_prior_dose", paste("Skipped:", ts_valid$message))
+  if ("time_anchor_consistency" %in% selected) out[["time_anchor_consistency"]] <- if (ts_valid$ok) run_check_with_cfg(check_time_anchor_consistency, list(adppk = adppk), cfg_item("time_anchor_consistency")) else .skip_result("time_anchor_consistency", paste("Skipped:", ts_valid$message))
   if ("cross_study_alignment" %in% selected) out[["cross_study_alignment"]] <- run_check_with_cfg(check_cross_study_alignment, list(adppk = adppk), cfg_item("cross_study_alignment"))
   if ("standardized_values" %in% selected) out[["standardized_values"]] <- run_check_with_cfg(check_standardized_values, list(adppk = adppk), cfg_item("standardized_values"))
 
