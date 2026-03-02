@@ -237,10 +237,28 @@ run_app <- function() {
       shinydashboard::valueBox(nper, "Periods", icon = shiny::icon("layer-group"), color = "yellow")
     })
 
-    output$vb_blq <- shinydashboard::renderValueBox({
+    blq_stats <- shiny::reactive({
       shiny::req(rv$adppk)
-      pblq <- if ("BLQFL" %in% names(rv$adppk)) round(100 * mean(toupper(as.character(rv$adppk$BLQFL)) == "Y", na.rm = TRUE), 2) else NA
-      shinydashboard::valueBox(paste0(pblq, "%"), "BLQ", icon = shiny::icon("flask"), color = "purple")
+      d <- rv$adppk
+      obs <- if ("EVID" %in% names(d)) d[as.numeric(d$EVID) == 0, , drop = FALSE] else d
+      if (nrow(obs) == 0) return(list(n_blq = 0, n_obs = 0, pct = NA_real_))
+
+      if ("BLQFN" %in% names(obs)) {
+        n_blq <- sum(as.numeric(obs$BLQFN) == 1, na.rm = TRUE)
+      } else if ("BLQFL" %in% names(obs)) {
+        n_blq <- sum(toupper(as.character(obs$BLQFL)) == "Y", na.rm = TRUE)
+      } else {
+        n_blq <- NA_real_
+      }
+      n_obs <- nrow(obs)
+      pct <- if (is.na(n_blq) || n_obs == 0) NA_real_ else round(100 * n_blq / n_obs, 2)
+      list(n_blq = n_blq, n_obs = n_obs, pct = pct)
+    })
+
+    output$vb_blq <- shinydashboard::renderValueBox({
+      s <- blq_stats()
+      val <- if (is.na(s$pct)) "NA" else paste0(s$pct, "%")
+      shinydashboard::valueBox(val, sprintf("BLQ (%s/%s)", s$n_blq, s$n_obs), icon = shiny::icon("flask"), color = "purple")
     })
 
     readiness <- shiny::reactive({
@@ -273,7 +291,7 @@ run_app <- function() {
           if ("EVID" %in% names(d)) round(100 * mean(d$EVID == 0, na.rm = TRUE), 2) else NA,
           if ("EVID" %in% names(d)) round(100 * mean(d$EVID == 1, na.rm = TRUE), 2) else NA,
           if ("DV" %in% names(d)) sum(is.na(d$DV)) else NA,
-          if ("BLQFL" %in% names(d)) sum(toupper(as.character(d$BLQFL)) == "Y", na.rm = TRUE) else NA,
+          blq_stats()$n_blq,
           if ("TIME" %in% names(d)) round(min(as.numeric(d$TIME), na.rm = TRUE), 3) else NA,
           if ("TIME" %in% names(d)) round(max(as.numeric(d$TIME), na.rm = TRUE), 3) else NA
         ),
