@@ -71,7 +71,7 @@ run_app <- function() {
           ".small-box h3{font-size:28px;font-weight:700;}",
           ".small-box p{font-size:13px;}",
           ".small-box .icon{color:rgba(31,41,55,.22) !important;}",
-          ".dataTables_wrapper .dataTables_filter input,.dataTables_wrapper .dataTables_length select{border-radius:8px;border:1px solid #d5dee7;background:#fff;} .content, .content *{color:#000 !important;}.table, .dataTable, .dataTables_wrapper{color:#1f2937 !important;} .dataTables_wrapper .dataTables_info,.dataTables_wrapper .dataTables_paginate{color:#374151 !important;}",
+          ".dataTables_wrapper .dataTables_filter input,.dataTables_wrapper .dataTables_length select{border-radius:8px;border:1px solid #d5dee7;background:#fff;} .content, .content *{color:#000 !important;} .main-sidebar .shiny-input-container label{color:#000 !important;font-weight:700;} .main-sidebar .form-control,.main-sidebar .selectize-input,.main-sidebar .selectize-dropdown,.main-sidebar input,.main-sidebar select,.main-sidebar textarea{color:#000 !important;background:#fff !important;} .main-sidebar .input-group-btn .btn{color:#000 !important;background:#f4f4f4 !important;} .main-sidebar .help-block,.main-sidebar .shiny-input-container .shiny-file-input-progress{color:#334155 !important;}.table, .dataTable, .dataTables_wrapper{color:#1f2937 !important;} .dataTables_wrapper .dataTables_info,.dataTables_wrapper .dataTables_paginate{color:#374151 !important;}",
           sep=""
         )))
       ),
