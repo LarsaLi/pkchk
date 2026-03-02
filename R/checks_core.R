@@ -22,7 +22,7 @@
 #' @return List with check result.
 #' @export
 check_required_vars <- function(adppk) {
-  req <- c("STUDYID", "USUBJID", "SUBJID", "PARAMCD", "AVAL", "AVALU", "POPPKFL")
+  req <- c("STUDYID", "USUBJID", "EVID", "MDV", "DV", "AMT", "TIME", "CMT", "PARAMCD", "AVAL")
   miss <- setdiff(req, names(adppk))
   list(
     check_id = "required_vars",
@@ -493,9 +493,15 @@ check_amt_for_dose <- function(adppk) {
 #' @return List with check result.
 #' @export
 check_mdv_assignment <- function(adppk) {
-  miss <- .check_missing_vars(adppk, c("MDV", "DV"), "mdv_assignment")
+  miss <- .check_missing_vars(adppk, c("MDV", "DV", "EVID"), "mdv_assignment")
   if (!is.null(miss)) return(miss)
-  idx <- which((is.na(adppk$DV) & as.numeric(adppk$MDV) != 1) | (!is.na(adppk$DV) & as.numeric(adppk$MDV) != 0))
+  evid <- as.numeric(adppk$EVID)
+  mdv <- as.numeric(adppk$MDV)
+  idx <- which(
+    (is.na(adppk$DV) & mdv != 1) |
+      (!is.na(adppk$DV) & mdv != 0) |
+      (evid == 1 & mdv != 1)
+  )
   issues <- if (length(idx) == 0) data.frame() else adppk[idx, intersect(c("USUBJID", "DV", "MDV", "EVID", "ADY"), names(adppk)), drop = FALSE]
   list(
     check_id = "mdv_assignment",
@@ -550,6 +556,102 @@ check_time_sequential <- function(adppk) {
     passed = nrow(bad) == 0,
     n_issue = nrow(bad),
     message = if (nrow(bad) == 0) "Times are sequential" else "Non-sequential times found",
+    issue_table = bad
+  )
+}
+
+#' Check event ordering at identical subject-time points
+#' @param adppk ADPPK data frame.
+#' @return List with check result.
+#' @export
+check_event_ordering <- function(adppk) {
+  miss <- .check_missing_vars(adppk, c("USUBJID", "TIME", "EVID"), "event_ordering")
+  if (!is.null(miss)) return(miss)
+  d <- adppk
+  d$.row <- seq_len(nrow(d))
+  key <- paste(d$USUBJID, as.numeric(d$TIME))
+  bad <- data.frame()
+  for (k in unique(key)) {
+    s <- d[key == k, c(".row", "USUBJID", "TIME", "EVID"), drop = FALSE]
+    if (nrow(s) < 2) next
+    if (any(s$EVID == 1) && any(s$EVID == 0)) {
+      i_dose <- min(which(s$EVID == 1))
+      i_obs <- min(which(s$EVID == 0))
+      if (i_obs < i_dose) {
+        bad <- rbind(bad, data.frame(USUBJID = s$USUBJID[1], TIME = s$TIME[1], reason = "EVID=0 appears before EVID=1 at same TIME", stringsAsFactors = FALSE))
+      }
+    }
+  }
+  list(
+    check_id = "event_ordering",
+    passed = nrow(bad) == 0,
+    n_issue = nrow(bad),
+    message = if (nrow(bad) == 0) "Event ordering valid at same TIME" else "Event ordering issues at same TIME",
+    issue_table = bad
+  )
+}
+
+#' Check every observation has a prior dose within subject-period
+#' @param adppk ADPPK data frame.
+#' @return List with check result.
+#' @export
+check_obs_has_prior_dose <- function(adppk) {
+  miss <- .check_missing_vars(adppk, c("USUBJID", "EVID", "TIME"), "obs_has_prior_dose")
+  if (!is.null(miss)) return(miss)
+  period_var <- if ("APERIOD" %in% names(adppk)) "APERIOD" else NA_character_
+  d <- adppk
+  if (is.na(period_var)) d$APERIOD <- 1
+  bad <- data.frame()
+  for (sid in unique(d$USUBJID)) {
+    for (p in unique(d$APERIOD[d$USUBJID == sid])) {
+      x <- d[d$USUBJID == sid & d$APERIOD == p, , drop = FALSE]
+      t_dose <- as.numeric(x$TIME[x$EVID == 1])
+      t_obs <- as.numeric(x$TIME[x$EVID == 0])
+      if (length(t_obs) == 0) next
+      if (length(t_dose) == 0) {
+        bad <- rbind(bad, data.frame(USUBJID = sid, APERIOD = p, reason = "No dose records in period", stringsAsFactors = FALSE))
+        next
+      }
+      min_d <- min(t_dose, na.rm = TRUE)
+      if (any(t_obs < min_d, na.rm = TRUE)) {
+        bad <- rbind(bad, data.frame(USUBJID = sid, APERIOD = p, reason = "Observation before first dose in period", stringsAsFactors = FALSE))
+      }
+    }
+  }
+  list(
+    check_id = "obs_has_prior_dose",
+    passed = nrow(bad) == 0,
+    n_issue = nrow(bad),
+    message = if (nrow(bad) == 0) "All observations have prior dose context" else "Observation records without proper dose context",
+    issue_table = bad
+  )
+}
+
+#' Check dose time anchor consistency by subject-period
+#' @param adppk ADPPK data frame.
+#' @return List with check result.
+#' @export
+check_time_anchor_consistency <- function(adppk) {
+  miss <- .check_missing_vars(adppk, c("USUBJID", "EVID", "TIME"), "time_anchor_consistency")
+  if (!is.null(miss)) return(miss)
+  d <- adppk
+  if (!"APERIOD" %in% names(d)) d$APERIOD <- 1
+  bad <- data.frame()
+  for (sid in unique(d$USUBJID)) {
+    for (p in unique(d$APERIOD[d$USUBJID == sid])) {
+      x <- d[d$USUBJID == sid & d$APERIOD == p & d$EVID == 1, , drop = FALSE]
+      if (nrow(x) == 0) next
+      min_time <- suppressWarnings(min(as.numeric(x$TIME), na.rm = TRUE))
+      if (is.finite(min_time) && abs(min_time) > 1e-8) {
+        bad <- rbind(bad, data.frame(USUBJID = sid, APERIOD = p, min_dose_time = min_time, reason = "First dose TIME is not zero", stringsAsFactors = FALSE))
+      }
+    }
+  }
+  list(
+    check_id = "time_anchor_consistency",
+    passed = nrow(bad) == 0,
+    n_issue = nrow(bad),
+    message = if (nrow(bad) == 0) "Dose time anchor consistent (first dose TIME=0)" else "Dose time anchor inconsistencies found",
     issue_table = bad
   )
 }
@@ -652,16 +754,20 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
   if ("mdv_assignment" %in% selected) out[["mdv_assignment"]] <- run_check_with_cfg(check_mdv_assignment, list(adppk = adppk), cfg_item("mdv_assignment"))
   if ("evid4_once" %in% selected) out[["evid4_once"]] <- run_check_with_cfg(check_evid4_once, list(adppk = adppk), cfg_item("evid4_once"))
   if ("time_sequential" %in% selected) out[["time_sequential"]] <- run_check_with_cfg(check_time_sequential, list(adppk = adppk), cfg_item("time_sequential"))
+  if ("event_ordering" %in% selected) out[["event_ordering"]] <- run_check_with_cfg(check_event_ordering, list(adppk = adppk), cfg_item("event_ordering"))
+  if ("obs_has_prior_dose" %in% selected) out[["obs_has_prior_dose"]] <- run_check_with_cfg(check_obs_has_prior_dose, list(adppk = adppk), cfg_item("obs_has_prior_dose"))
+  if ("time_anchor_consistency" %in% selected) out[["time_anchor_consistency"]] <- run_check_with_cfg(check_time_anchor_consistency, list(adppk = adppk), cfg_item("time_anchor_consistency"))
   if ("cross_study_alignment" %in% selected) out[["cross_study_alignment"]] <- run_check_with_cfg(check_cross_study_alignment, list(adppk = adppk), cfg_item("cross_study_alignment"))
   if ("standardized_values" %in% selected) out[["standardized_values"]] <- run_check_with_cfg(check_standardized_values, list(adppk = adppk), cfg_item("standardized_values"))
 
   sev_map <- c(
-    required_vars = "error", name_label_len = "error", pk_no_dose = "error", poppk_consistency = "error",
-    char_num_mapping = "error", char_truncation = "warn", fixed_covariates = "warn", predose_time = "error",
+    required_vars = "model_blocker", name_label_len = "error", pk_no_dose = "model_blocker", poppk_consistency = "error",
+    char_num_mapping = "error", char_truncation = "warn", fixed_covariates = "warn", predose_time = "model_blocker",
     sampling_dev_10pct = "warn", unexpected_values = "warn", covariate_outliers = "warn",
     nominal_actual_deviation = "warn", nominal_actual_consistency = "warn", missing_by_evid = "info",
-    duplicates = "error", expected_ranges = "error", bloq_middle = "warn", high_predose = "warn",
-    amt_for_dose = "error", mdv_assignment = "error", evid4_once = "warn", time_sequential = "error",
+    duplicates = "model_blocker", expected_ranges = "error", bloq_middle = "warn", high_predose = "warn",
+    amt_for_dose = "model_blocker", mdv_assignment = "model_blocker", evid4_once = "warn", time_sequential = "model_blocker",
+    event_ordering = "model_blocker", obs_has_prior_dose = "model_blocker", time_anchor_consistency = "model_blocker",
     cross_study_alignment = "warn", standardized_values = "info"
   )
   if (!is.null(cfg)) {
@@ -685,7 +791,7 @@ checks_registry <- function() {
       "char_truncation", "fixed_covariates", "predose_time", "sampling_dev_10pct", "unexpected_values",
       "covariate_outliers", "nominal_actual_deviation", "nominal_actual_consistency", "missing_by_evid", "duplicates",
       "expected_ranges", "bloq_middle", "high_predose", "amt_for_dose", "mdv_assignment",
-      "evid4_once", "time_sequential", "cross_study_alignment", "standardized_values"
+      "evid4_once", "time_sequential", "event_ordering", "obs_has_prior_dose", "time_anchor_consistency", "cross_study_alignment", "standardized_values"
     ),
     label = c(
       "Required/conditional variables",
@@ -710,6 +816,9 @@ checks_registry <- function() {
       "MDV assignment vs DV",
       "EVID=4 once per period",
       "Actual times increase sequentially",
+      "Dose before observation at same time",
+      "Every observation has prior dose context",
+      "First dose TIME anchor consistency (TIME=0)",
       "Cross-study variable alignment",
       "Standardized categorical/numeric values"
     ),
