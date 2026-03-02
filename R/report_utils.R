@@ -55,7 +55,8 @@ checks_to_issues <- function(check_out) {
 
   tabs <- lapply(check_out, function(x) {
     if (is.null(x$issue_table) || nrow(x$issue_table) == 0) return(NULL)
-    sug <- if (is.null(suggestion_map[[x$check_id]])) "Review source derivation and study-specific rule." else unname(suggestion_map[[x$check_id]])
+    sug_val <- suggestion_map[x$check_id]
+    sug <- if (length(sug_val) == 0 || is.na(sug_val)) "Review source derivation and study-specific rule." else unname(sug_val)
     cbind(
       check_id = x$check_id,
       severity = if (!is.null(x$severity)) x$severity else "error",
