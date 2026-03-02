@@ -8,6 +8,7 @@
 #' @param period_n Number of periods (for multi-period studies).
 #' @param seed Random seed.
 #' @param inject_test_issues Logical; inject a small set of realistic issues for QC testing.
+#' @param issue_level Issue injection level: "low", "medium", or "high".
 #' @param inject_missing_dose Logical; inject subjects with PK but no dose records.
 #' @param inject_non_poppk Logical; inject non-POPPK subjects/records.
 #' @param inject_char_num_mismatch Logical; inject race/racen mismatch.
@@ -20,11 +21,13 @@ generate_dummy_pk_package <- function(
     period_n = 1,
     seed = 123,
     inject_test_issues = FALSE,
+    issue_level = c("low", "medium", "high"),
     inject_missing_dose = FALSE,
     inject_non_poppk = FALSE,
     inject_char_num_mismatch = FALSE
 ) {
   study_type <- match.arg(study_type)
+  issue_level <- match.arg(issue_level)
   set.seed(seed)
 
   # --- DM -----------------------------------------------------------------
@@ -256,21 +259,28 @@ generate_dummy_pk_package <- function(
 
   # Optional realistic QC issues for testing check logic
   if (isTRUE(inject_test_issues)) {
-    # 1) a few sampling deviations >10%
+    lvl <- switch(issue_level, low = 0.01, medium = 0.03, high = 0.06)
+
+    # 1) sampling deviations >10%
     ix_obs <- which(adppk$EVID == 0 & !is.na(adppk$NTIME))
     if (length(ix_obs) > 0) {
-      pick <- sample(ix_obs, max(1, floor(0.02 * length(ix_obs))))
+      pick <- sample(ix_obs, max(1, floor(lvl * length(ix_obs))))
       adppk$TIME[pick] <- adppk$NTIME[pick] * 1.2
     }
 
-    # 2) one duplicate row
+    # 2) duplicate rows
+    ndup <- max(1, floor(lvl * nrow(adppk)))
     if (nrow(adppk) > 20) {
-      adppk <- rbind(adppk, adppk[sample(seq_len(nrow(adppk)), 1), , drop = FALSE])
+      dup_idx <- sample(seq_len(nrow(adppk)), min(ndup, nrow(adppk)))
+      adppk <- rbind(adppk, adppk[dup_idx, , drop = FALSE])
     }
 
-    # 3) a small MDV inconsistency
+    # 3) MDV inconsistencies
     ix_mdv <- which(adppk$EVID == 0 & !is.na(adppk$DV))
-    if (length(ix_mdv) > 0) adppk$MDV[sample(ix_mdv, 1)] <- 1
+    if (length(ix_mdv) > 0) {
+      mdv_pick <- sample(ix_mdv, max(1, floor(lvl * length(ix_mdv))))
+      adppk$MDV[mdv_pick] <- 1
+    }
   }
 
   # Sort records: by subject, time, EVID desc (dose before obs at same time)
@@ -296,6 +306,7 @@ generate_dummy_adppk <- function(
     period_n = 1,
     seed = 123,
     inject_test_issues = FALSE,
+    issue_level = c("low", "medium", "high"),
     inject_missing_dose = FALSE,
     inject_non_poppk = FALSE,
     inject_char_num_mismatch = FALSE
@@ -306,6 +317,7 @@ generate_dummy_adppk <- function(
     period_n = period_n,
     seed = seed,
     inject_test_issues = inject_test_issues,
+    issue_level = issue_level,
     inject_missing_dose = inject_missing_dose,
     inject_non_poppk = inject_non_poppk,
     inject_char_num_mismatch = inject_char_num_mismatch

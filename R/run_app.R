@@ -27,6 +27,7 @@ run_app <- function() {
       shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
       shiny::numericInput("period_n", "Periods", value = 1, min = 1, max = 10),
       shiny::checkboxInput("inject_test_issues", "Inject realistic test issues", value = TRUE),
+      shiny::selectInput("issue_level", "Issue level", choices = c("low", "medium", "high"), selected = "medium"),
       shiny::actionButton("gen_dummy", "Generate dummy ADPPK", class = "btn-primary"),
       shiny::downloadButton("download_dummy_sources", "Download DM/EX/PC/ADPPK"),
       shiny::hr(),
@@ -148,6 +149,7 @@ run_app <- function() {
         n_subj = input$n_subj,
         period_n = input$period_n,
         inject_test_issues = isTRUE(input$inject_test_issues),
+        issue_level = input$issue_level,
         seed = 123
       )
       rv$dm <- x$dm; rv$ex <- x$ex; rv$pc <- x$pc

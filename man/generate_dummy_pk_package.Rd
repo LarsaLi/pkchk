@@ -7,7 +7,10 @@
 generate_dummy_pk_package(
   study_type = c("SAD", "MAD"),
   n_subj = 40,
+  period_n = 1,
   seed = 123,
+  inject_test_issues = FALSE,
+  issue_level = c("low", "medium", "high"),
   inject_missing_dose = FALSE,
   inject_non_poppk = FALSE,
   inject_char_num_mismatch = FALSE
@@ -18,7 +21,13 @@ generate_dummy_pk_package(
 
 \item{n_subj}{Number of subjects.}
 
+\item{period_n}{Number of periods (for multi-period studies).}
+
 \item{seed}{Random seed.}
+
+\item{inject_test_issues}{Logical; inject a small set of realistic issues for QC testing.}
+
+\item{issue_level}{Issue injection level: "low", "medium", or "high".}
 
 \item{inject_missing_dose}{Logical; inject subjects with PK but no dose records.}
 
