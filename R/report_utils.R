@@ -67,7 +67,19 @@ checks_to_issues <- function(check_out) {
   })
   tabs <- Filter(Negate(is.null), tabs)
   if (length(tabs) == 0) return(data.frame(info = "No issues found", stringsAsFactors = FALSE))
-  do.call(rbind, tabs)
+
+  # rbind with fill to handle different issue-table schemas across checks
+  all_cols <- unique(unlist(lapply(tabs, names)))
+  tabs2 <- lapply(tabs, function(df) {
+    miss <- setdiff(all_cols, names(df))
+    if (length(miss) > 0) {
+      for (m in miss) df[[m]] <- NA
+    }
+    df[, all_cols, drop = FALSE]
+  })
+  out <- do.call(rbind, tabs2)
+  rownames(out) <- NULL
+  out
 }
 
 #' Generate HTML checklist report
