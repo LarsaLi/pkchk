@@ -26,6 +26,7 @@ run_app <- function() {
       shiny::selectInput("study_type", "Dummy study type", choices = c("SAD", "MAD")),
       shiny::numericInput("n_subj", "Subjects", value = 40, min = 10, max = 500),
       shiny::numericInput("period_n", "Periods", value = 1, min = 1, max = 10),
+      shiny::checkboxInput("inject_test_issues", "Inject realistic test issues", value = TRUE),
       shiny::actionButton("gen_dummy", "Generate dummy ADPPK", class = "btn-primary"),
       shiny::downloadButton("download_dummy_sources", "Download DM/EX/PC/ADPPK"),
       shiny::hr(),
@@ -142,7 +143,13 @@ run_app <- function() {
     )
 
     shiny::observeEvent(input$gen_dummy, {
-      x <- generate_dummy_pk_package(study_type = input$study_type, n_subj = input$n_subj, period_n = input$period_n, seed = 123)
+      x <- generate_dummy_pk_package(
+        study_type = input$study_type,
+        n_subj = input$n_subj,
+        period_n = input$period_n,
+        inject_test_issues = isTRUE(input$inject_test_issues),
+        seed = 123
+      )
       rv$dm <- x$dm; rv$ex <- x$ex; rv$pc <- x$pc
       rv$adppk <- x$adppk; rv$addose <- x$addose
       rv$source <- sprintf("dummy (%s, n=%s, periods=%s)", input$study_type, input$n_subj, input$period_n)
@@ -391,10 +398,26 @@ run_app <- function() {
       if (is.null(tab) || nrow(tab) == 0) {
         tab <- data.frame(info = "No issue rows for selected check", stringsAsFactors = FALSE)
       }
+
+      # contextual ADPPK record preview (when USUBJID/TIME available)
+      rec_preview <- data.frame(info = "No linked ADPPK preview available", stringsAsFactors = FALSE)
+      if (!is.null(rv$adppk) && nrow(rv$adppk) > 0 && "USUBJID" %in% names(tab) && "USUBJID" %in% names(rv$adppk)) {
+        ids <- unique(stats::na.omit(tab$USUBJID))
+        p <- rv$adppk[rv$adppk$USUBJID %in% ids, , drop = FALSE]
+        if ("TIME" %in% names(tab) && "TIME" %in% names(rv$adppk)) {
+          tvals <- unique(stats::na.omit(as.numeric(tab$TIME)))
+          if (length(tvals) > 0) p <- p[as.numeric(p$TIME) %in% tvals, , drop = FALSE]
+        }
+        if (nrow(p) > 0) rec_preview <- utils::head(p, 30)
+      }
+
       shiny::showModal(shiny::modalDialog(
         title = paste("Check details:", cid),
         shiny::tags$p(msg),
+        shiny::tags$h4("Issue rows"),
         DT::datatable(tab, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE),
+        shiny::tags$h4("Linked ADPPK record preview"),
+        DT::datatable(rec_preview, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE),
         easyClose = TRUE,
         size = "l"
       ))

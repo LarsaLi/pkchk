@@ -7,6 +7,7 @@
 #' @param n_subj Number of subjects.
 #' @param period_n Number of periods (for multi-period studies).
 #' @param seed Random seed.
+#' @param inject_test_issues Logical; inject a small set of realistic issues for QC testing.
 #' @param inject_missing_dose Logical; inject subjects with PK but no dose records.
 #' @param inject_non_poppk Logical; inject non-POPPK subjects/records.
 #' @param inject_char_num_mismatch Logical; inject race/racen mismatch.
@@ -18,6 +19,7 @@ generate_dummy_pk_package <- function(
     n_subj = 40,
     period_n = 1,
     seed = 123,
+    inject_test_issues = FALSE,
     inject_missing_dose = FALSE,
     inject_non_poppk = FALSE,
     inject_char_num_mismatch = FALSE
@@ -93,14 +95,22 @@ generate_dummy_pk_package <- function(
 
     for (d in seq_along(dts)) {
       tm <- nominal_times
-      abs_dt <- dts[d] + tm * 3600
-      c0 <- ifelse(grepl("HIGH", dm$ARM[i]), 120, 80)
+      # actual clock times include realistic jitter around nominal
+      jitter_min <- stats::rnorm(length(tm), mean = 0, sd = 6)
+      abs_dt <- dts[d] + (tm * 60 + jitter_min) * 60
+
+      c0 <- ifelse(grepl("HIGH", dm$ARM[i]), 180, 110)
       # Slight accumulation in MAD by day
-      day_factor <- ifelse(study_type == "MAD", 1 + (d - 1) * 0.05, 1)
-      conc <- pmax(0, (c0 * day_factor) * exp(-0.23 * pmax(tm, 0)) + stats::rnorm(length(tm), 0, 3))
-      # predose values lower
-      conc[tm < 0] <- pmax(0, conc[tm < 0] * 0.1)
-      blq <- conc < 1
+      day_factor <- ifelse(study_type == "MAD", 1 + (d - 1) * 0.06, 1)
+      conc <- pmax(0, (c0 * day_factor) * exp(-0.19 * pmax(tm, 0)) + stats::rnorm(length(tm), 0, 6))
+      # predose values lower but not always zero
+      conc[tm < 0] <- pmax(0, conc[tm < 0] * 0.2)
+
+      lloq <- 2
+      blq <- conc < lloq
+      # inject some additional realistic BLQ at low tail only
+      low_tail <- conc < stats::quantile(conc, probs = 0.2, na.rm = TRUE)
+      blq <- blq | (low_tail & stats::runif(length(conc)) < 0.08)
       pcstat <- ifelse(blq, "BLQ", NA)
 
       one_subj[[d]] <- data.frame(
@@ -202,9 +212,9 @@ generate_dummy_pk_package <- function(
     PARAMCD = ad_pk$PARAMCD, PARAM = ad_pk$PARAM,
     AVAL = ad_pk$AVAL, AVALU = ad_pk$AVALU,
     DV = ad_pk$DV, PCSTRESC = as.character(ad_pk$DV),
-    LLOQ = 1, ALLOQ = 1, AULOQ = 10000,
-    BLQFL = ifelse(toupper(as.character(ad_pk$PCSTAT)) == "BLQ" | ad_pk$AVAL < 1, "Y", "N"),
-    BLQFN = ifelse(toupper(as.character(ad_pk$PCSTAT)) == "BLQ" | ad_pk$AVAL < 1, 1L, 0L),
+    LLOQ = 2, ALLOQ = 2, AULOQ = 10000,
+    BLQFL = ifelse(toupper(as.character(ad_pk$PCSTAT)) == "BLQ" | ad_pk$AVAL < 2, "Y", "N"),
+    BLQFN = ifelse(toupper(as.character(ad_pk$PCSTAT)) == "BLQ" | ad_pk$AVAL < 2, 1L, 0L),
     ALQFL = "N", ALQFN = 0L,
     EXTRT = "TEST DRUG", ROUTE = "ORAL", ROUTEN = 1,
     DOSE = NA_real_, DOSEU = "mg", DOSEA = NA_real_, DOSEP = NA_real_,
@@ -244,6 +254,25 @@ generate_dummy_pk_package <- function(
     adppk$RACEN[ix] <- adppk$RACEN[ix] + 9L
   }
 
+  # Optional realistic QC issues for testing check logic
+  if (isTRUE(inject_test_issues)) {
+    # 1) a few sampling deviations >10%
+    ix_obs <- which(adppk$EVID == 0 & !is.na(adppk$NTIME))
+    if (length(ix_obs) > 0) {
+      pick <- sample(ix_obs, max(1, floor(0.02 * length(ix_obs))))
+      adppk$TIME[pick] <- adppk$NTIME[pick] * 1.2
+    }
+
+    # 2) one duplicate row
+    if (nrow(adppk) > 20) {
+      adppk <- rbind(adppk, adppk[sample(seq_len(nrow(adppk)), 1), , drop = FALSE])
+    }
+
+    # 3) a small MDV inconsistency
+    ix_mdv <- which(adppk$EVID == 0 & !is.na(adppk$DV))
+    if (length(ix_mdv) > 0) adppk$MDV[sample(ix_mdv, 1)] <- 1
+  }
+
   # Sort records: by subject, time, EVID desc (dose before obs at same time)
   ord <- order(adppk$USUBJID, adppk$TIME, -adppk$EVID)
   adppk <- adppk[ord, , drop = FALSE]
@@ -266,6 +295,7 @@ generate_dummy_adppk <- function(
     n_subj = 40,
     period_n = 1,
     seed = 123,
+    inject_test_issues = FALSE,
     inject_missing_dose = FALSE,
     inject_non_poppk = FALSE,
     inject_char_num_mismatch = FALSE
@@ -275,6 +305,7 @@ generate_dummy_adppk <- function(
     n_subj = n_subj,
     period_n = period_n,
     seed = seed,
+    inject_test_issues = inject_test_issues,
     inject_missing_dose = inject_missing_dose,
     inject_non_poppk = inject_non_poppk,
     inject_char_num_mismatch = inject_char_num_mismatch
