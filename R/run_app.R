@@ -32,9 +32,12 @@ run_app <- function() {
       shiny::h4("Checks"),
       shiny::checkboxGroupInput("checks", "Select checks", choices = stats::setNames(reg$id, reg$label), selected = reg$id[1:8]),
       shiny::actionButton("select_all_checks", "Select all"),
+      shiny::actionButton("clear_all_checks", "Clear all"),
+      shiny::actionButton("select_blockers", "Select model blockers"),
       shiny::actionButton("run_checks", "Run checks", class = "btn-success"),
       shiny::hr(),
       shiny::downloadButton("download_checks", "Download check summary (CSV)"),
+      shiny::downloadButton("download_blockers", "Download model blockers (CSV)"),
       shiny::downloadButton("download_report", "Download check report (HTML)")
     ),
     shinydashboard::dashboardBody(
@@ -85,10 +88,12 @@ run_app <- function() {
         shinydashboard::tabItem(
           tabName = "summary",
           shiny::fluidRow(
-            shinydashboard::valueBoxOutput("vb_records", width = 3),
-            shinydashboard::valueBoxOutput("vb_subjects", width = 3),
-            shinydashboard::valueBoxOutput("vb_periods", width = 3),
-            shinydashboard::valueBoxOutput("vb_blq", width = 3)
+            shinydashboard::valueBoxOutput("vb_records", width = 2),
+            shinydashboard::valueBoxOutput("vb_subjects", width = 2),
+            shinydashboard::valueBoxOutput("vb_periods", width = 2),
+            shinydashboard::valueBoxOutput("vb_blq", width = 2),
+            shinydashboard::valueBoxOutput("vb_readiness", width = 2),
+            shinydashboard::valueBoxOutput("vb_blockers", width = 2)
           ),
           shiny::fluidRow(
             shinydashboard::box(title = "Summary metrics", width = 4, status = "primary", solidHeader = TRUE,
@@ -184,6 +189,15 @@ run_app <- function() {
       shiny::updateCheckboxGroupInput(session, "checks", selected = reg$id)
     })
 
+    shiny::observeEvent(input$clear_all_checks, {
+      shiny::updateCheckboxGroupInput(session, "checks", selected = character(0))
+    })
+
+    shiny::observeEvent(input$select_blockers, {
+      blocker_ids <- c("required_vars", "pk_no_dose", "predose_time", "duplicates", "amt_for_dose", "mdv_assignment", "time_sequential", "event_ordering", "obs_has_prior_dose", "time_anchor_consistency")
+      shiny::updateCheckboxGroupInput(session, "checks", selected = intersect(reg$id, blocker_ids))
+    })
+
     output$data_status <- shiny::renderUI({
       if (is.null(rv$adppk)) {
         shiny::tags$div("No dataset loaded yet. Upload ADPPK or generate dummy data.")
@@ -218,6 +232,22 @@ run_app <- function() {
       shiny::req(rv$adppk)
       pblq <- if ("BLQFL" %in% names(rv$adppk)) round(100 * mean(toupper(as.character(rv$adppk$BLQFL)) == "Y", na.rm = TRUE), 2) else NA
       shinydashboard::valueBox(paste0(pblq, "%"), "BLQ", icon = shiny::icon("flask"), color = "purple")
+    })
+
+    readiness <- shiny::reactive({
+      if (is.null(rv$check_out)) return(model_readiness_score(NULL))
+      model_readiness_score(checks_to_summary(rv$check_out))
+    })
+
+    output$vb_readiness <- shinydashboard::renderValueBox({
+      r <- readiness()
+      col <- if (r$status == "READY") "green" else if (r$status == "REVIEW") "yellow" else if (r$status == "BLOCKED") "red" else "light-blue"
+      shinydashboard::valueBox(r$score, "Model readiness", icon = shiny::icon("gauge-high"), color = col)
+    })
+
+    output$vb_blockers <- shinydashboard::renderValueBox({
+      r <- readiness()
+      shinydashboard::valueBox(r$blockers, "Model blockers", icon = shiny::icon("triangle-exclamation"), color = ifelse(r$blockers > 0, "red", "green"))
     })
 
     output$summary_dt <- DT::renderDataTable({
@@ -398,6 +428,17 @@ run_app <- function() {
       filename = function() paste0("pkchk_checklist_summary_", Sys.Date(), ".csv"),
       content = function(file) {
         utils::write.csv(result_table(), file, row.names = FALSE)
+      }
+    )
+
+    output$download_blockers <- shiny::downloadHandler(
+      filename = function() paste0("pkchk_model_blockers_", Sys.Date(), ".csv"),
+      content = function(file) {
+        shiny::req(rv$check_out)
+        x <- checks_to_summary(rv$check_out)
+        x <- x[x$severity == "model_blocker" & x$status == "fail", , drop = FALSE]
+        if (nrow(x) == 0) x <- data.frame(info = "No model blocker failures", stringsAsFactors = FALSE)
+        utils::write.csv(x, file, row.names = FALSE)
       }
     )
 

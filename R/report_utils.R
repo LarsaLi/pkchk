@@ -16,6 +16,24 @@ checks_to_summary <- function(check_out) {
   }))
 }
 
+#' Compute model readiness score from check summary
+#' @param summary_df Output of `checks_to_summary()`
+#' @return list with score and counters.
+#' @export
+model_readiness_score <- function(summary_df) {
+  if (is.null(summary_df) || nrow(summary_df) == 0) {
+    return(list(score = 0, blockers = 0, fail = 0, pass = 0, skip = 0, status = "NO_DATA"))
+  }
+  pass_n <- sum(summary_df$status == "pass", na.rm = TRUE)
+  fail_n <- sum(summary_df$status == "fail", na.rm = TRUE)
+  skip_n <- sum(summary_df$status == "skip", na.rm = TRUE)
+  blocker_n <- sum(summary_df$status == "fail" & summary_df$severity == "model_blocker", na.rm = TRUE)
+  base <- if ((pass_n + fail_n) == 0) 0 else round(100 * pass_n / (pass_n + fail_n), 1)
+  score <- max(0, base - blocker_n * 10)
+  status <- if (blocker_n > 0) "BLOCKED" else if (score >= 90) "READY" else if (score >= 70) "REVIEW" else "NOT_READY"
+  list(score = score, blockers = blocker_n, fail = fail_n, pass = pass_n, skip = skip_n, status = status)
+}
+
 #' Build issue table from check results
 #' @param check_out Named list from `run_checks()`
 #' @return data.frame
