@@ -15,7 +15,15 @@ mod_check_runner <- function(id) {
           if (!is.null(input$cfg_file) && nzchar(input$cfg_file$datapath)) {
             load_check_config(input$cfg_file$datapath)
           } else {
-            load_check_config()
+            cfg_path <- switch(
+              input$profile,
+              default = system.file("config", "checks_default.yml", package = "pkchk"),
+              sad_strict = system.file("config", "checks_sad_strict.yml", package = "pkchk"),
+              mad_sparse = system.file("config", "checks_mad_sparse.yml", package = "pkchk"),
+              poppk_pool = system.file("config", "checks_popppk_pool.yml", package = "pkchk"),
+              system.file("config", "checks_default.yml", package = "pkchk")
+            )
+            load_check_config(cfg_path)
           }
         })
 
@@ -33,7 +41,18 @@ mod_check_runner <- function(id) {
         output$check_table <- DT::renderDataTable({
           shiny::req(check_out())
           s <- checks_to_summary(check_out())
-          DT::datatable(s, options = list(pageLength = 12, scrollX = TRUE), rownames = FALSE)
+          dt <- DT::datatable(s, options = list(pageLength = 12, scrollX = TRUE), rownames = FALSE)
+          dt <- DT::formatStyle(
+            dt,
+            "status",
+            backgroundColor = DT::styleEqual(c("pass", "fail", "skip"), c("#dcfce7", "#fee2e2", "#f3f4f6")),
+            color = DT::styleEqual(c("pass", "fail", "skip"), c("#166534", "#991b1b", "#374151"))
+          )
+          DT::formatStyle(
+            dt,
+            "severity",
+            fontWeight = DT::styleEqual(c("model_blocker", "error", "warn", "info"), c("700", "600", "500", "400"))
+          )
         })
       })
     },
@@ -45,7 +64,13 @@ mod_check_runner <- function(id) {
           DT::dataTableOutput(ns("check_table"))
         ),
         encoding = shiny::div(
-          shiny::fileInput(ns("cfg_file"), "YAML config"),
+          shiny::selectInput(
+            ns("profile"),
+            "Quick profile",
+            choices = c("default", "sad_strict", "mad_sparse", "poppk_pool"),
+            selected = "default"
+          ),
+          shiny::fileInput(ns("cfg_file"), "YAML config (optional override)"),
           shiny::checkboxGroupInput(
             ns("selected_checks"),
             "Checks",
