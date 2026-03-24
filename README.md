@@ -27,9 +27,23 @@ remotes::install_github("LarsaLi/pkchk")
 
 ```r
 library(pkchk)
+
 run_app()          # existing dashboard app
-# run_teal_app()   # optional teal UI (install teal packages first)
+# optional teal UI (install teal + teal.data + teal.widgets + teal.modules.general + teal.reporter)
+# run_teal_app()
 ```
+
+## Teal quick profiles
+
+The teal check module supports built-in quick profiles:
+
+- `default`
+- `sad_strict`
+- `mad_sparse`
+- `poppk_pool`
+
+You can also upload a custom YAML config to override the selected profile.
+
 
 ## Core functions
 

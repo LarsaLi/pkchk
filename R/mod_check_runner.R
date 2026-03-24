@@ -54,6 +54,22 @@ mod_check_runner <- function(id) {
             fontWeight = DT::styleEqual(c("model_blocker", "error", "warn", "info"), c("700", "600", "500", "400"))
           )
         })
+
+        output$download_summary <- shiny::downloadHandler(
+          filename = function() paste0("pkchk-teal-check-summary-", Sys.Date(), ".csv"),
+          content = function(file) {
+            shiny::req(check_out())
+            utils::write.csv(checks_to_summary(check_out()), file, row.names = FALSE)
+          }
+        )
+
+        output$download_report <- shiny::downloadHandler(
+          filename = function() paste0("pkchk-teal-check-report-", Sys.Date(), ".html"),
+          content = function(file) {
+            shiny::req(check_out())
+            generate_check_report_html(adppk(), check_out(), file, cfg = cfg())
+          }
+        )
       })
     },
     ui = function(id) {
@@ -77,7 +93,10 @@ mod_check_runner <- function(id) {
             choices = stats::setNames(checks_registry()$id, checks_registry()$label),
             selected = checks_registry()$id
           ),
-          shiny::actionButton(ns("run_btn"), "Run checks", class = "btn-success", width = "100%")
+          shiny::actionButton(ns("run_btn"), "Run checks", class = "btn-success", width = "100%"),
+          shiny::br(), shiny::br(),
+          shiny::downloadButton(ns("download_summary"), "Download summary (CSV)"),
+          shiny::downloadButton(ns("download_report"), "Download report (HTML)")
         )
       )
     }
