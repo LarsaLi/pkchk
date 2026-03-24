@@ -109,8 +109,8 @@ checks:
     rule_version: 1.0.0
   time_anchor_consistency:
     enabled: true
-    severity: model_blocker
-    rule_version: 1.0.0
+    severity: warn
+    rule_version: 1.1.0
   cross_study_alignment:
     enabled: true
     severity: warn

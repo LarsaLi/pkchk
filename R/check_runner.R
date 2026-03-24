@@ -17,9 +17,11 @@ run_check_with_cfg <- function(fn, args, cfg_item = NULL) {
   out <- do.call(fn, c(args, extra))
   out$rule_version <- if (!is.null(cfg_item) && !is.null(cfg_item$rule_version)) as.character(cfg_item$rule_version) else "1.0.0"
 
-  # Unified status field for downstream reporting
-  msg <- if (!is.null(out$message)) tolower(out$message) else ""
-  is_skip <- isTRUE(out$passed) && grepl("skip|skipped|single study only|no .*available|no .*records", msg)
-  out$status <- if (is_skip) "skip" else if (isTRUE(out$passed)) "pass" else "fail"
+  # Unified status field for downstream reporting (preserve explicit status from checks)
+  if (is.null(out$status)) {
+    msg <- if (!is.null(out$message)) tolower(out$message) else ""
+    is_skip <- isTRUE(out$passed) && grepl("skip|skipped|single study only|no .*available|no .*records", msg)
+    out$status <- if (is_skip) "skip" else if (isTRUE(out$passed)) "pass" else "fail"
+  }
   out
 }

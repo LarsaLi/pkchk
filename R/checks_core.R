@@ -503,9 +503,19 @@ check_mdv_assignment <- function(adppk) {
   if (!is.null(miss)) return(miss)
   evid <- as.numeric(adppk$EVID)
   mdv <- as.numeric(adppk$MDV)
+
+  # BLQ samples are commonly retained with DV present while MDV stays 1.
+  blq_flag <- rep(FALSE, nrow(adppk))
+  for (nm in c("BLQFL", "BLQFN")) {
+    if (nm %in% names(adppk)) {
+      x <- adppk[[nm]]
+      blq_flag <- blq_flag | (toupper(as.character(x)) %in% c("Y", "1", "TRUE"))
+    }
+  }
+
   idx <- which(
     (is.na(adppk$DV) & mdv != 1) |
-      (!is.na(adppk$DV) & mdv != 0) |
+      (!is.na(adppk$DV) & mdv != 0 & evid == 0 & !blq_flag) |
       (evid == 1 & mdv != 1)
   )
   issues <- if (length(idx) == 0) data.frame() else adppk[idx, intersect(c("USUBJID", "DV", "MDV", "EVID", "ADY"), names(adppk)), drop = FALSE]
@@ -776,7 +786,7 @@ run_checks <- function(adppk, addose = data.frame(), selected = checks_registry(
     nominal_actual_deviation = "warn", nominal_actual_consistency = "warn", missing_by_evid = "info",
     duplicates = "model_blocker", expected_ranges = "error", bloq_middle = "warn", high_predose = "warn",
     amt_for_dose = "model_blocker", mdv_assignment = "model_blocker", evid4_once = "warn", time_sequential = "model_blocker",
-    event_ordering = "model_blocker", obs_has_prior_dose = "model_blocker", time_anchor_consistency = "model_blocker",
+    event_ordering = "model_blocker", obs_has_prior_dose = "model_blocker", time_anchor_consistency = "warn",
     cross_study_alignment = "warn", standardized_values = "info"
   )
   if (!is.null(cfg)) {
