@@ -27,7 +27,8 @@ remotes::install_github("LarsaLi/pkchk")
 
 ```r
 library(pkchk)
-run_app()
+run_app()          # existing dashboard app
+# run_teal_app()   # optional teal UI (install teal packages first)
 ```
 
 ## Core functions

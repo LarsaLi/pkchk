@@ -1,0 +1,27 @@
+template:
+  bootstrap: 5
+
+reference:
+  - title: Application
+    contents:
+      - run_app
+      - run_teal_app
+  - title: Data generation
+    contents:
+      - starts_with("generate_dummy")
+  - title: Check functions
+    contents:
+      - starts_with("check_")
+      - run_checks
+      - checks_registry
+  - title: Reporting
+    contents:
+      - checks_to_summary
+      - checks_to_issues
+      - model_readiness_score
+      - generate_check_report_html
+  - title: Teal modules
+    contents:
+      - mod_data_overview
+      - mod_check_runner
+      - mod_pk_visualization

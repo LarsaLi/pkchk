@@ -3,13 +3,23 @@ Title: NONMEM PK Data Review and Check Shiny App
 Version: 0.0.0.9000
 Authors@R: 
     person("RL", "", , "rl@example.com", role = c("aut", "cre"))
-Description: Build and run a Shiny application for NONMEM PK dataset review,
+Description: Build and run Shiny applications for NONMEM PK dataset review,
     including ADPPK dummy data generation and modular data quality checks.
 License: MIT + file LICENSE
+URL: https://github.com/LarsaLi/pkchk
+BugReports: https://github.com/LarsaLi/pkchk/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Suggests: 
+    ggplot2,
+    plotly,
+    teal,
+    teal.data,
+    teal.logger,
+    teal.modules.general,
+    teal.reporter,
+    teal.widgets,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Imports: 
