@@ -172,11 +172,15 @@ generate_dummy_pk_package <- function(
   ad_pk$AVAL <- ad_pk$DV
   ad_pk$AVALU <- ad_pk$PCSTRESU
 
+  # P2-9: look up ARM directly from DM rather than relying on merge-suffix logic
+  arm_lookup <- stats::setNames(dm$ARM, dm$USUBJID)
+
   keep_dose <- data.frame(
     STUDYID = ad_dose$STUDYID,
     USUBJID = ad_dose$USUBJID,
     SUBJID = sub("STDY01-", "", ad_dose$USUBJID),
-    ARM = NA_character_, ACTARM = NA_character_, TRT01P = NA_character_, TRT01A = NA_character_,
+    ARM = arm_lookup[ad_dose$USUBJID], ACTARM = arm_lookup[ad_dose$USUBJID],
+    TRT01P = arm_lookup[ad_dose$USUBJID], TRT01A = arm_lookup[ad_dose$USUBJID],
     VISIT = paste0("DAY ", floor(ad_dose$TIME / 24) + 1),
     VISITNUM = floor(ad_dose$TIME / 24) + 1,
     ADY = floor(ad_dose$TIME / 24) + 1,
@@ -203,7 +207,8 @@ generate_dummy_pk_package <- function(
     STUDYID = ad_pk$STUDYID,
     USUBJID = ad_pk$USUBJID,
     SUBJID = sub("STDY01-", "", ad_pk$USUBJID),
-    ARM = NA_character_, ACTARM = NA_character_, TRT01P = NA_character_, TRT01A = NA_character_,
+    ARM = arm_lookup[ad_pk$USUBJID], ACTARM = arm_lookup[ad_pk$USUBJID],
+    TRT01P = arm_lookup[ad_pk$USUBJID], TRT01A = arm_lookup[ad_pk$USUBJID],
     VISIT = paste0("DAY ", floor(ad_pk$TIME / 24) + 1),
     VISITNUM = floor(ad_pk$TIME / 24) + 1,
     ADY = floor(ad_pk$TIME / 24) + 1,
@@ -230,15 +235,10 @@ generate_dummy_pk_package <- function(
   )
 
   adppk <- rbind(keep_dose, keep_pk)
-  adppk <- merge(adppk, dm[, c("USUBJID", "ARM", "ARMCD", "SEX", "RACE", "RACEN", "AGE", "SAFFL", "POPPKFL")], by = "USUBJID", all.x = TRUE, suffixes = c("", ".DM"))
-
-  # fill arm values from DM if empty
-  fill_from_dm <- function(x, y) ifelse(is.na(x) | x == "", y, x)
-  adppk$ARM <- fill_from_dm(adppk$ARM, adppk$ARM.DM)
-  adppk$ACTARM <- adppk$ARM
-  adppk$TRT01P <- adppk$ARM
-  adppk$TRT01A <- adppk$ARM
-  adppk$ARM.DM <- NULL
+  # P2-9: ARM is now set directly from DM lookup above; only merge the remaining
+  # DM columns that are not yet in the combined frame.
+  dm_extra <- dm[, c("USUBJID", "ARMCD", "SEX", "RACE", "RACEN", "AGE", "SAFFL", "POPPKFL")]
+  adppk <- merge(adppk, dm_extra, by = "USUBJID", all.x = TRUE)
 
   # Inject requested anomalies
   if (inject_missing_dose) {

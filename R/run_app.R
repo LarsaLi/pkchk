@@ -2,6 +2,8 @@
 #'
 #' @export
 run_app <- function() {
+  # P1-4: serve external CSS from inst/app/www/
+  shiny::addResourcePath("pkchk_www", system.file("app", "www", package = "pkchk"))
   reg <- checks_registry()
 
   ui <- shinydashboard::dashboardPage(
@@ -44,38 +46,8 @@ run_app <- function() {
     ),
     shinydashboard::dashboardBody(
       shiny::tags$head(
-        shiny::tags$style(shiny::HTML(paste(
-          "body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#000 !important;}",
-          ".main-header .logo{font-weight:700;letter-spacing:.2px;background:#f7fafc !important;color:#000 !important;border-bottom:1px solid #e7edf3;}",
-          ".main-header .navbar{background:#f7fafc !important;border-bottom:1px solid #e7edf3;}",
-          ".main-header .sidebar-toggle{color:#000 !important;}",
-          ".main-sidebar{background:#f8fbfd !important;border-right:1px solid #e7edf3;}",
-          ".sidebar-menu>li>a{padding-top:12px;padding-bottom:12px;color:#000 !important;font-weight:700;}",
-          ".sidebar-menu>li.active>a,.sidebar-menu>li:hover>a{border-left-color:#6b8fa3 !important;background:#e9f1f6 !important;color:#000 !important;}",
-          ".content-wrapper,.right-side{background:#f5f8fb;}",
-          ".box{border:1px solid #e7edf3;border-radius:14px;box-shadow:0 4px 14px rgba(15,23,42,.04);}",
-          ".box.box-primary>.box-header{background:#f2f7fb;color:#000;border-top-left-radius:14px;border-top-right-radius:14px;border-bottom:1px solid #e7edf3;font-weight:700;}",
-          ".box.box-info>.box-header{background:#f2f8fa;color:#000;border-top-left-radius:14px;border-top-right-radius:14px;border-bottom:1px solid #e7edf3;font-weight:700;}",
-          ".box.box-success>.box-header{background:#f2faf6;color:#000;border-top-left-radius:14px;border-top-right-radius:14px;border-bottom:1px solid #e7edf3;font-weight:700;}",
-          ".box.box-warning>.box-header{background:#fcf8f1;color:#000;border-top-left-radius:14px;border-top-right-radius:14px;border-bottom:1px solid #e7edf3;font-weight:700;}",
-          ".btn{border-radius:10px;font-weight:600;}",
-          ".btn-primary{background:#7ea5bf;border-color:#7ea5bf;color:#fff;}",
-          ".btn-primary:hover{background:#7298b0;border-color:#7298b0;}",
-          ".btn-success{background:#8fb6a1;border-color:#8fb6a1;color:#fff;}",
-          ".btn-success:hover{background:#81a893;border-color:#81a893;}",
-          ".btn-info{background:#9bb7c9;border-color:#9bb7c9;color:#fff;}",
-          ".small-box{border-radius:14px;box-shadow:0 4px 14px rgba(15,23,42,.05);}",
-          ".small-box.bg-aqua{background:#d9ecf5 !important;color:#000 !important;}",
-          ".small-box.bg-green{background:#e3f1e8 !important;color:#000 !important;}",
-          ".small-box.bg-yellow{background:#f6efdd !important;color:#000 !important;}",
-          ".small-box.bg-purple{background:#ece6f7 !important;color:#000 !important;}",
-          ".small-box>.inner{padding:14px 12px;}",
-          ".small-box h3{font-size:28px;font-weight:700;}",
-          ".small-box p{font-size:13px;}",
-          ".small-box .icon{color:rgba(31,41,55,.22) !important;}",
-          ".dataTables_wrapper .dataTables_filter input,.dataTables_wrapper .dataTables_length select{border-radius:8px;border:1px solid #d5dee7;background:#fff;} .content, .content *{color:#000 !important;} .main-sidebar .shiny-input-container label{color:#000 !important;font-weight:700;} .main-sidebar .form-control,.main-sidebar .selectize-input,.main-sidebar .selectize-dropdown,.main-sidebar input,.main-sidebar select,.main-sidebar textarea{color:#000 !important;background:#fff !important;} .main-sidebar .input-group-btn .btn{color:#000 !important;background:#f4f4f4 !important;} .main-sidebar .help-block,.main-sidebar .shiny-input-container .shiny-file-input-progress{color:#334155 !important;}.table, .dataTable, .dataTables_wrapper{color:#1f2937 !important;} .dataTables_wrapper .dataTables_info,.dataTables_wrapper .dataTables_paginate{color:#374151 !important;}",
-          sep=""
-        )))
+        # P1-4: CSS moved to external file inst/app/www/styles.css
+        shiny::tags$link(rel = "stylesheet", type = "text/css", href = "pkchk_www/styles.css")
       ),
       shinydashboard::tabItems(
         shinydashboard::tabItem(
@@ -144,13 +116,25 @@ run_app <- function() {
     )
 
     shiny::observeEvent(input$gen_dummy, {
+      # P3-8: server-side input validation
+      n_val <- as.integer(input$n_subj)
+      p_val <- as.integer(input$period_n)
+      if (is.na(n_val) || n_val < 1 || n_val > 10000) {
+        shiny::showNotification("n_subj must be between 1 and 10000", type = "error")
+        return()
+      }
+      if (is.na(p_val) || p_val < 1 || p_val > 50) {
+        shiny::showNotification("period_n must be between 1 and 50", type = "error")
+        return()
+      }
+      # P3-5: random seed for interactive generation so each click gives new data
       x <- generate_dummy_pk_package(
         study_type = input$study_type,
-        n_subj = input$n_subj,
-        period_n = input$period_n,
+        n_subj = n_val,
+        period_n = p_val,
         inject_test_issues = isTRUE(input$inject_test_issues),
         issue_level = input$issue_level,
-        seed = 123
+        seed = sample.int(.Machine$integer.max, 1L)
       )
       rv$dm <- x$dm; rv$ex <- x$ex; rv$pc <- x$pc
       rv$adppk <- x$adppk; rv$addose <- x$addose
@@ -203,7 +187,10 @@ run_app <- function() {
     })
 
     shiny::observeEvent(input$select_blockers, {
-      blocker_ids <- c("required_vars", "pk_no_dose", "predose_time", "duplicates", "amt_for_dose", "mdv_assignment", "time_sequential", "event_ordering", "obs_has_prior_dose", "time_anchor_consistency")
+      # P3-2: derive blocker IDs dynamically from the current config rather than
+      # a hardcoded list that could drift out of sync with the YAML.
+      sev <- severity_overrides(rv$cfg)
+      blocker_ids <- names(sev)[sev == "model_blocker"]
       shiny::updateCheckboxGroupInput(session, "checks", selected = intersect(reg$id, blocker_ids))
     })
 
@@ -263,7 +250,8 @@ run_app <- function() {
 
     readiness <- shiny::reactive({
       if (is.null(rv$check_out)) return(model_readiness_score(NULL))
-      model_readiness_score(checks_to_summary(rv$check_out))
+      # P1-2: reuse result_table() reactive instead of calling checks_to_summary again
+      model_readiness_score(result_table())
     })
 
     output$vb_readiness <- shinydashboard::renderValueBox({
@@ -452,24 +440,27 @@ run_app <- function() {
       filename = function() paste0("pkchk_dummy_sources_", Sys.Date(), ".zip"),
       content = function(file) {
         shiny::req(rv$dm, rv$ex, rv$pc, rv$adppk)
-        td <- tempdir()
+        # P1-3: use absolute paths + "-j" flag instead of setwd() to avoid
+        # changing the process working directory (race condition in multi-user servers)
+        td <- tempfile("pkchk_zip_")
+        dir.create(td, showWarnings = FALSE)
         f_dm <- file.path(td, "DM.csv")
         f_ex <- file.path(td, "EX.csv")
         f_pc <- file.path(td, "PC.csv")
         f_ad <- file.path(td, "ADPPK.csv")
-        utils::write.csv(rv$dm, f_dm, row.names = FALSE)
-        utils::write.csv(rv$ex, f_ex, row.names = FALSE)
-        utils::write.csv(rv$pc, f_pc, row.names = FALSE)
+        utils::write.csv(rv$dm,    f_dm, row.names = FALSE)
+        utils::write.csv(rv$ex,    f_ex, row.names = FALSE)
+        utils::write.csv(rv$pc,    f_pc, row.names = FALSE)
         utils::write.csv(rv$adppk, f_ad, row.names = FALSE)
-        owd <- getwd(); on.exit(setwd(owd), add = TRUE)
-        setwd(td)
-        utils::zip(zipfile = file, files = c("DM.csv", "EX.csv", "PC.csv", "ADPPK.csv"))
+        utils::zip(zipfile = file, files = c(f_dm, f_ex, f_pc, f_ad), flags = "-j")
       }
     )
 
     output$download_checks <- shiny::downloadHandler(
       filename = function() paste0("pkchk_checklist_summary_", Sys.Date(), ".csv"),
       content = function(file) {
+        # P0-3: req() inside downloadHandler content prevents crash before checks run
+        shiny::req(rv$check_out)
         utils::write.csv(result_table(), file, row.names = FALSE)
       }
     )
@@ -478,7 +469,8 @@ run_app <- function() {
       filename = function() paste0("pkchk_model_blockers_", Sys.Date(), ".csv"),
       content = function(file) {
         shiny::req(rv$check_out)
-        x <- checks_to_summary(rv$check_out)
+        # P1-2: reuse result_table() reactive instead of calling checks_to_summary again
+        x <- result_table()
         x <- x[x$severity == "model_blocker" & x$status == "fail", , drop = FALSE]
         if (nrow(x) == 0) x <- data.frame(info = "No model blocker failures", stringsAsFactors = FALSE)
         utils::write.csv(x, file, row.names = FALSE)

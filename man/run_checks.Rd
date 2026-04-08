@@ -24,5 +24,7 @@ run_checks(
 Named list of check results.
 }
 \description{
-Run selected checks
+Each check is wrapped in tryCatch so a single failing check never prevents
+the remaining checks from running.  Severity is derived from the dispatch
+registry defaults and can be overridden via the YAML config.
 }

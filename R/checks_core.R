@@ -95,6 +95,11 @@ check_pk_no_dose <- function(adppk, addose) {
 }
 
 #' Check POPPK consistency at subject and record level
+#'
+#' Non-POPPK subjects (POPPKFL != "Y") are flagged. NA values in POPPKFL are
+#' treated as non-violations to avoid false positives on dosing rows where the
+#' flag is not applicable.
+#'
 #' @param adppk ADPPK data frame.
 #' @return List with check result.
 #' @export
@@ -102,8 +107,10 @@ check_poppk_consistency <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "POPPKFL", "PARAMCD", "AVAL"), "poppk_consistency")
   if (!is.null(miss)) return(miss)
 
-  subj_bad <- unique(adppk$USUBJID[adppk$POPPKFL != "Y"])
-  rec_bad <- adppk[adppk$POPPKFL != "Y", c("USUBJID", "PARAMCD", "AVAL", "POPPKFL")]
+  # P0-1: guard against NA — NA POPPKFL is not a violation
+  flag <- !is.na(adppk$POPPKFL) & adppk$POPPKFL != "Y"
+  subj_bad <- unique(adppk$USUBJID[flag])
+  rec_bad  <- adppk[flag, c("USUBJID", "PARAMCD", "AVAL", "POPPKFL"), drop = FALSE]
   list(
     check_id = "poppk_consistency",
     passed = nrow(rec_bad) == 0,
@@ -142,18 +149,21 @@ check_char_truncation <- function(adppk) {
   char_cols <- names(adppk)[vapply(adppk, is.character, logical(1))]
   if (length(char_cols) == 0) return(.pass_result("char_truncation", "No character columns"))
 
-  issues <- data.frame()
-  for (v in char_cols) {
+  # P2-3: list accumulator instead of rbind-in-loop
+  acc <- lapply(char_cols, function(v) {
     x <- adppk[[v]]
     x <- x[!is.na(x)]
-    if (length(x) == 0) next
+    if (length(x) == 0) return(NULL)
     max_len <- max(nchar(x))
     pct_at_max <- mean(nchar(x) == max_len)
     has_marker <- any(grepl("\\.\\.\\.$", x))
     if ((max_len >= 12 && pct_at_max > 0.3) || has_marker) {
-      issues <- rbind(issues, data.frame(variable = v, max_len = max_len, pct_at_max = round(pct_at_max, 3), has_marker = has_marker, stringsAsFactors = FALSE))
-    }
-  }
+      data.frame(variable = v, max_len = max_len, pct_at_max = round(pct_at_max, 3),
+                 has_marker = has_marker, stringsAsFactors = FALSE)
+    } else NULL
+  })
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
 
   list(
     check_id = "char_truncation",
@@ -174,14 +184,16 @@ check_fixed_covariates <- function(adppk) {
   if (!is.null(miss)) return(miss)
   if (length(vars) == 0) return(.pass_result("fixed_covariates", "No covariates available"))
 
-  issues <- data.frame()
-  for (v in vars) {
-    tab <- stats::aggregate(adppk[[v]], by = list(USUBJID = adppk$USUBJID), FUN = function(x) length(unique(x[!is.na(x)])))
+  # P1-1, P2-3: vectorized per-variable check with list accumulator
+  acc <- lapply(vars, function(v) {
+    tab <- stats::aggregate(adppk[[v]], by = list(USUBJID = adppk$USUBJID),
+                            FUN = function(x) length(unique(x[!is.na(x)])))
     bad <- tab$USUBJID[tab$x > 1]
-    if (length(bad) > 0) {
-      issues <- rbind(issues, data.frame(variable = v, USUBJID = bad, stringsAsFactors = FALSE))
-    }
-  }
+    if (length(bad) == 0) return(NULL)
+    data.frame(variable = v, USUBJID = bad, stringsAsFactors = FALSE)
+  })
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
 
   list(
     check_id = "fixed_covariates",
@@ -245,20 +257,22 @@ check_unexpected_values <- function(adppk) {
   nums <- intersect(c("DOSE", "AVAL"), names(adppk))
   if (length(nums) == 0) return(.pass_result("unexpected_values", "No numeric dose/concentration variables"))
 
-  issues <- data.frame()
-  for (v in nums) {
+  # P2-3: list accumulator
+  acc <- lapply(nums, function(v) {
     x <- as.numeric(adppk[[v]])
-    x <- x[!is.na(x)]
-    if (length(x) < 5) next
-    q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+    x_valid <- x[!is.na(x)]
+    if (length(x_valid) < 5) return(NULL)
+    q <- stats::quantile(x_valid, probs = c(0.25, 0.75))
     iqr <- q[2] - q[1]
     lo <- q[1] - 3 * iqr
     hi <- q[2] + 3 * iqr
-    idx <- which(as.numeric(adppk[[v]]) < lo | as.numeric(adppk[[v]]) > hi)
-    if (length(idx) > 0) {
-      issues <- rbind(issues, data.frame(variable = v, USUBJID = adppk$USUBJID[idx], value = as.numeric(adppk[[v]][idx]), lo = lo, hi = hi, stringsAsFactors = FALSE))
-    }
-  }
+    idx <- which(!is.na(x) & (x < lo | x > hi))
+    if (length(idx) == 0) return(NULL)
+    data.frame(variable = v, USUBJID = adppk$USUBJID[idx], value = x[idx], lo = lo, hi = hi,
+               stringsAsFactors = FALSE)
+  })
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
 
   list(
     check_id = "unexpected_values",
@@ -276,16 +290,21 @@ check_unexpected_values <- function(adppk) {
 check_covariate_outliers <- function(adppk) {
   covs <- intersect(c("AGE", "WT", "HT"), names(adppk))
   if (length(covs) == 0) return(.pass_result("covariate_outliers", "No covariates available"))
-  issues <- data.frame()
-  for (v in covs) {
+
+  # P2-3: list accumulator
+  acc <- lapply(covs, function(v) {
     x <- as.numeric(adppk[[v]])
     q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
     iqr <- q[2] - q[1]
     lo <- q[1] - 3 * iqr
     hi <- q[2] + 3 * iqr
-    idx <- which(x < lo | x > hi)
-    if (length(idx) > 0) issues <- rbind(issues, data.frame(variable = v, USUBJID = adppk$USUBJID[idx], value = x[idx], stringsAsFactors = FALSE))
-  }
+    idx <- which(!is.na(x) & (x < lo | x > hi))
+    if (length(idx) == 0) return(NULL)
+    data.frame(variable = v, USUBJID = adppk$USUBJID[idx], value = x[idx], stringsAsFactors = FALSE)
+  })
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
+
   list(
     check_id = "covariate_outliers",
     passed = nrow(issues) == 0,
@@ -322,16 +341,19 @@ check_nominal_actual_deviation <- function(adppk, abs_dev_threshold = 2) {
 check_nominal_actual_consistency <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "TIME", "NTIME"), "nominal_actual_consistency")
   if (!is.null(miss)) return(miss)
-  bad <- data.frame()
-  for (sid in unique(adppk$USUBJID)) {
-    d <- adppk[adppk$USUBJID == sid, , drop = FALSE]
-    if (nrow(d) < 3) next
+
+  # P1-1: replace subject loop with split() + lapply
+  grps <- split(seq_len(nrow(adppk)), adppk$USUBJID)
+  bad_ids <- names(Filter(isTRUE, lapply(grps, function(idx) {
+    d <- adppk[idx, , drop = FALSE]
+    if (nrow(d) < 3) return(FALSE)
     o_n <- order(as.numeric(d$NTIME))
     o_t <- order(as.numeric(d$TIME))
-    if (!identical(o_n, o_t)) {
-      bad <- rbind(bad, data.frame(USUBJID = sid, reason = "Time ordering mismatch", stringsAsFactors = FALSE))
-    }
-  }
+    !identical(o_n, o_t)
+  })))
+  bad <- if (length(bad_ids) == 0) data.frame() else
+    data.frame(USUBJID = bad_ids, reason = "Time ordering mismatch", stringsAsFactors = FALSE)
+
   list(
     check_id = "nominal_actual_consistency",
     passed = nrow(bad) == 0,
@@ -352,14 +374,15 @@ check_missing_by_evid <- function(adppk, high_missing_threshold_pct = 20) {
 
   vars <- names(adppk)
   ev <- unique(adppk$EVID)
-  out <- data.frame()
-  for (e in ev) {
+
+  # P2-3: list accumulator; P2-4: issue_table returns only violating rows
+  acc <- lapply(ev, function(e) {
     d <- adppk[adppk$EVID == e, , drop = FALSE]
-    if (nrow(d) == 0) next
+    if (nrow(d) == 0) return(NULL)
     p <- vapply(d, function(x) mean(is.na(x)), numeric(1))
-    tmp <- data.frame(EVID = e, variable = vars, missing_pct = round(100 * p, 2), stringsAsFactors = FALSE)
-    out <- rbind(out, tmp)
-  }
+    data.frame(EVID = e, variable = vars, missing_pct = round(100 * p, 2), stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, Filter(Negate(is.null), acc))
 
   hi <- out[out$missing_pct > as.numeric(high_missing_threshold_pct), , drop = FALSE]
   list(
@@ -367,7 +390,7 @@ check_missing_by_evid <- function(adppk, high_missing_threshold_pct = 20) {
     passed = nrow(hi) == 0,
     n_issue = nrow(hi),
     message = if (nrow(hi) == 0) sprintf("Missingness by EVID <= %s%%", high_missing_threshold_pct) else sprintf("High missingness (>%s%%) by EVID", high_missing_threshold_pct),
-    issue_table = out
+    issue_table = hi  # P2-4: only violation rows, not full table
   )
 }
 
@@ -390,23 +413,52 @@ check_duplicates <- function(adppk) {
 }
 
 #' Check expected ranges for common fields
+#'
+#' DOSE range is only checked for EVID=1 dosing records; observation rows
+#' (EVID=0) legitimately carry DOSE=NA or DOSE=0.
+#'
 #' @param adppk ADPPK data frame.
 #' @return List with check result.
 #' @export
 check_expected_ranges <- function(adppk) {
-  issues <- data.frame()
+  # P0-4: list accumulator + EVID filter for DOSE + !is.na guards
+  acc <- list()
+
   if ("AGE" %in% names(adppk)) {
-    idx <- which(as.numeric(adppk$AGE) < 0 | as.numeric(adppk$AGE) > 120)
-    if (length(idx) > 0) issues <- rbind(issues, data.frame(variable = "AGE", USUBJID = adppk$USUBJID[idx], value = adppk$AGE[idx], stringsAsFactors = FALSE))
+    age_num <- as.numeric(adppk$AGE)
+    idx <- which(!is.na(age_num) & (age_num < 0 | age_num > 120))
+    if (length(idx) > 0)
+      acc[[length(acc) + 1L]] <- data.frame(variable = "AGE", USUBJID = adppk$USUBJID[idx],
+                                             value = adppk$AGE[idx], stringsAsFactors = FALSE)
   }
+
   if ("DOSE" %in% names(adppk)) {
-    idx <- which(as.numeric(adppk$DOSE) <= 0 | as.numeric(adppk$DOSE) > 1e6)
-    if (length(idx) > 0) issues <- rbind(issues, data.frame(variable = "DOSE", USUBJID = adppk$USUBJID[idx], value = adppk$DOSE[idx], stringsAsFactors = FALSE))
+    # Only check dose rows; obs rows have DOSE=NA/0 by design
+    dose_idx <- if ("EVID" %in% names(adppk)) {
+      which(as.numeric(adppk$EVID) == 1)
+    } else {
+      seq_len(nrow(adppk))
+    }
+    if (length(dose_idx) > 0) {
+      d_vals <- as.numeric(adppk$DOSE[dose_idx])
+      bad <- dose_idx[which(!is.na(d_vals) & (d_vals <= 0 | d_vals > 1e6))]
+      if (length(bad) > 0)
+        acc[[length(acc) + 1L]] <- data.frame(variable = "DOSE", USUBJID = adppk$USUBJID[bad],
+                                               value = adppk$DOSE[bad], stringsAsFactors = FALSE)
+    }
   }
+
   if ("AVAL" %in% names(adppk)) {
-    idx <- which(as.numeric(adppk$AVAL) < 0)
-    if (length(idx) > 0) issues <- rbind(issues, data.frame(variable = "AVAL", USUBJID = adppk$USUBJID[idx], value = adppk$AVAL[idx], stringsAsFactors = FALSE))
+    aval_num <- as.numeric(adppk$AVAL)
+    idx <- which(!is.na(aval_num) & aval_num < 0)
+    if (length(idx) > 0)
+      acc[[length(acc) + 1L]] <- data.frame(variable = "AVAL", USUBJID = adppk$USUBJID[idx],
+                                             value = adppk$AVAL[idx], stringsAsFactors = FALSE)
   }
+
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
+
   list(
     check_id = "expected_ranges",
     passed = nrow(issues) == 0,
@@ -424,23 +476,23 @@ check_bloq_middle <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "PARAMCD", "BLQFL", "ATPTN"), "bloq_middle")
   if (!is.null(miss)) return(miss)
 
-  bad <- data.frame()
-  ids <- unique(paste(adppk$USUBJID, adppk$PARAMCD, sep = "||"))
-  for (id in ids) {
-    s <- strsplit(id, "\\|\\|")[[1]]
-    d <- adppk[adppk$USUBJID == s[1] & adppk$PARAMCD == s[2], , drop = FALSE]
-    d <- d[order(as.numeric(d$ATPTN)), ]
+  # P1-1, P3-1: replace string-key loop with split()
+  grps <- split(seq_len(nrow(adppk)), list(adppk$USUBJID, adppk$PARAMCD), drop = TRUE)
+  acc <- lapply(grps, function(idx) {
+    ord <- idx[order(as.numeric(adppk$ATPTN[idx]))]
+    d <- adppk[ord, , drop = FALSE]
     f <- toupper(as.character(d$BLQFL)) == "Y"
-    if (sum(f, na.rm = TRUE) == 0) next
+    if (sum(f, na.rm = TRUE) == 0) return(NULL)
     first <- which(!f)[1]
-    last <- utils::tail(which(!f), 1)
-    if (!is.na(first) && !is.na(last) && first < last) {
-      mid <- seq(first, last)
-      if (any(f[mid], na.rm = TRUE)) {
-        bad <- rbind(bad, data.frame(USUBJID = s[1], PARAMCD = s[2], reason = "BLOQ in middle", stringsAsFactors = FALSE))
-      }
-    }
-  }
+    last  <- utils::tail(which(!f), 1)
+    if (!is.na(first) && !is.na(last) && first < last &&
+        any(f[seq(first, last)], na.rm = TRUE)) {
+      data.frame(USUBJID = d$USUBJID[1], PARAMCD = d$PARAMCD[1],
+                 reason = "BLOQ in middle", stringsAsFactors = FALSE)
+    } else NULL
+  })
+  bad <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(bad)) bad <- data.frame()
 
   list(
     check_id = "bloq_middle",
@@ -465,7 +517,8 @@ check_high_predose <- function(adppk, predose_ratio_threshold = 0.2) {
   mx <- stats::aggregate(AVAL ~ USUBJID, adppk, max)
   names(mx)[2] <- "MAXAVAL"
   d <- merge(adppk[pre_idx, c("USUBJID", "AVAL", "ATPTN")], mx, by = "USUBJID", all.x = TRUE)
-  bad <- d[d$AVAL > as.numeric(predose_ratio_threshold) * d$MAXAVAL & d$MAXAVAL > 0, , drop = FALSE]
+  bad <- d[!is.na(d$AVAL) & !is.na(d$MAXAVAL) & d$MAXAVAL > 0 &
+             d$AVAL > as.numeric(predose_ratio_threshold) * d$MAXAVAL, , drop = FALSE]
 
   list(
     check_id = "high_predose",
@@ -540,9 +593,11 @@ check_evid4_once <- function(adppk) {
 
   d <- adppk[as.numeric(adppk$EVID) == 4, c("USUBJID", period_var), drop = FALSE]
   if (nrow(d) == 0) return(.pass_result("evid4_once", "No EVID=4 records"))
-  names(d)[2] <- "PERIOD_"
-  tab <- stats::aggregate(PERIOD_ ~ USUBJID + PERIOD_, d, length)
-  bad <- tab[tab$PERIOD_ > 1, , drop = FALSE]
+
+  # P0-2: use table() to correctly count per subject-period; aggregate had a
+  # column-name collision bug where PERIOD_ was used as both group and response.
+  cnt <- as.data.frame(table(USUBJID = d$USUBJID, PERIOD = d[[period_var]]))
+  bad <- cnt[cnt$Freq > 1, , drop = FALSE]
 
   list(
     check_id = "evid4_once",
@@ -560,13 +615,16 @@ check_evid4_once <- function(adppk) {
 check_time_sequential <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "TIME"), "time_sequential")
   if (!is.null(miss)) return(miss)
-  bad <- data.frame()
-  for (sid in unique(adppk$USUBJID)) {
-    t <- as.numeric(adppk$TIME[adppk$USUBJID == sid])
+
+  # P1-1: replace for loop with split() + lapply
+  grps <- split(as.numeric(adppk$TIME), adppk$USUBJID)
+  bad_ids <- names(Filter(isTRUE, lapply(grps, function(t) {
     t <- t[!is.na(t)]
-    if (length(t) < 2) next
-    if (any(diff(t) < 0)) bad <- rbind(bad, data.frame(USUBJID = sid, stringsAsFactors = FALSE))
-  }
+    length(t) >= 2 && any(diff(t) < 0)
+  })))
+  bad <- if (length(bad_ids) == 0) data.frame() else
+    data.frame(USUBJID = bad_ids, stringsAsFactors = FALSE)
+
   list(
     check_id = "time_sequential",
     passed = nrow(bad) == 0,
@@ -583,21 +641,25 @@ check_time_sequential <- function(adppk) {
 check_event_ordering <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "TIME", "EVID"), "event_ordering")
   if (!is.null(miss)) return(miss)
-  d <- adppk
-  d$.row <- seq_len(nrow(d))
-  key <- paste(d$USUBJID, as.numeric(d$TIME))
-  bad <- data.frame()
-  for (k in unique(key)) {
-    s <- d[key == k, c(".row", "USUBJID", "TIME", "EVID"), drop = FALSE]
-    if (nrow(s) < 2) next
-    if (any(s$EVID == 1) && any(s$EVID == 0)) {
-      i_dose <- min(which(s$EVID == 1))
-      i_obs <- min(which(s$EVID == 0))
-      if (i_obs < i_dose) {
-        bad <- rbind(bad, data.frame(USUBJID = s$USUBJID[1], TIME = s$TIME[1], reason = "EVID=0 appears before EVID=1 at same TIME", stringsAsFactors = FALSE))
-      }
-    }
-  }
+
+  # P1-1: replace for loop with split() + lapply
+  key <- paste(adppk$USUBJID, as.numeric(adppk$TIME))
+  grps <- split(seq_len(nrow(adppk)), key)
+
+  acc <- lapply(grps, function(idx) {
+    if (length(idx) < 2) return(NULL)
+    evids <- adppk$EVID[idx]
+    if (!any(evids == 1) || !any(evids == 0)) return(NULL)
+    i_dose <- min(which(evids == 1))
+    i_obs  <- min(which(evids == 0))
+    if (i_obs < i_dose) {
+      data.frame(USUBJID = adppk$USUBJID[idx[1]], TIME = adppk$TIME[idx[1]],
+                 reason = "EVID=0 appears before EVID=1 at same TIME", stringsAsFactors = FALSE)
+    } else NULL
+  })
+  bad <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(bad)) bad <- data.frame()
+
   list(
     check_id = "event_ordering",
     passed = nrow(bad) == 0,
@@ -614,26 +676,30 @@ check_event_ordering <- function(adppk) {
 check_obs_has_prior_dose <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "EVID", "TIME"), "obs_has_prior_dose")
   if (!is.null(miss)) return(miss)
-  period_var <- if ("APERIOD" %in% names(adppk)) "APERIOD" else NA_character_
   d <- adppk
-  if (is.na(period_var)) d$APERIOD <- 1
-  bad <- data.frame()
-  for (sid in unique(d$USUBJID)) {
-    for (p in unique(d$APERIOD[d$USUBJID == sid])) {
-      x <- d[d$USUBJID == sid & d$APERIOD == p, , drop = FALSE]
-      t_dose <- as.numeric(x$TIME[x$EVID == 1])
-      t_obs <- as.numeric(x$TIME[x$EVID == 0])
-      if (length(t_obs) == 0) next
-      if (length(t_dose) == 0) {
-        bad <- rbind(bad, data.frame(USUBJID = sid, APERIOD = p, reason = "No dose records in period", stringsAsFactors = FALSE))
-        next
-      }
-      min_d <- min(t_dose, na.rm = TRUE)
-      if (any(t_obs < min_d, na.rm = TRUE)) {
-        bad <- rbind(bad, data.frame(USUBJID = sid, APERIOD = p, reason = "Observation before first dose in period", stringsAsFactors = FALSE))
-      }
-    }
-  }
+  if (!"APERIOD" %in% names(d)) d$APERIOD <- 1L
+
+  # P1-1: replace double for loop with split() + lapply
+  grps <- split(seq_len(nrow(d)), paste(d$USUBJID, d$APERIOD))
+
+  acc <- lapply(grps, function(idx) {
+    x <- d[idx, , drop = FALSE]
+    t_dose <- as.numeric(x$TIME[x$EVID == 1])
+    t_obs  <- as.numeric(x$TIME[x$EVID == 0])
+    if (length(t_obs) == 0) return(NULL)
+    sid <- x$USUBJID[1]
+    p   <- x$APERIOD[1]
+    if (length(t_dose) == 0)
+      return(data.frame(USUBJID = sid, APERIOD = p,
+                        reason = "No dose records in period", stringsAsFactors = FALSE))
+    if (any(t_obs < min(t_dose, na.rm = TRUE), na.rm = TRUE))
+      return(data.frame(USUBJID = sid, APERIOD = p,
+                        reason = "Observation before first dose in period", stringsAsFactors = FALSE))
+    NULL
+  })
+  bad <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(bad)) bad <- data.frame()
+
   list(
     check_id = "obs_has_prior_dose",
     passed = nrow(bad) == 0,
@@ -651,18 +717,25 @@ check_time_anchor_consistency <- function(adppk) {
   miss <- .check_missing_vars(adppk, c("USUBJID", "EVID", "TIME"), "time_anchor_consistency")
   if (!is.null(miss)) return(miss)
   d <- adppk
-  if (!"APERIOD" %in% names(d)) d$APERIOD <- 1
-  bad <- data.frame()
-  for (sid in unique(d$USUBJID)) {
-    for (p in unique(d$APERIOD[d$USUBJID == sid])) {
-      x <- d[d$USUBJID == sid & d$APERIOD == p & d$EVID == 1, , drop = FALSE]
-      if (nrow(x) == 0) next
-      min_time <- suppressWarnings(min(as.numeric(x$TIME), na.rm = TRUE))
-      if (is.finite(min_time) && abs(min_time) > 1e-8) {
-        bad <- rbind(bad, data.frame(USUBJID = sid, APERIOD = p, min_dose_time = min_time, reason = "First dose TIME is not zero", stringsAsFactors = FALSE))
-      }
-    }
-  }
+  if (!"APERIOD" %in% names(d)) d$APERIOD <- 1L
+
+  # P1-1: replace double for loop with split() + lapply on dose rows only
+  dose_rows <- d[!is.na(d$EVID) & as.numeric(d$EVID) == 1, , drop = FALSE]
+  if (nrow(dose_rows) == 0) return(.pass_result("time_anchor_consistency", "No dosing records"))
+
+  grps <- split(seq_len(nrow(dose_rows)), paste(dose_rows$USUBJID, dose_rows$APERIOD))
+  acc <- lapply(grps, function(idx) {
+    x <- dose_rows[idx, , drop = FALSE]
+    min_time <- suppressWarnings(min(as.numeric(x$TIME), na.rm = TRUE))
+    if (is.finite(min_time) && abs(min_time) > 1e-8) {
+      data.frame(USUBJID = x$USUBJID[1], APERIOD = x$APERIOD[1],
+                 min_dose_time = min_time, reason = "First dose TIME is not zero",
+                 stringsAsFactors = FALSE)
+    } else NULL
+  })
+  bad <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(bad)) bad <- data.frame()
+
   list(
     check_id = "time_anchor_consistency",
     passed = nrow(bad) == 0,
@@ -673,6 +746,9 @@ check_time_anchor_consistency <- function(adppk) {
 }
 
 #' Align variable types/formats across studies
+#'
+#' Returns a skip result for single-study datasets (check is not applicable).
+#'
 #' @param adppk ADPPK data frame.
 #' @return List with check result.
 #' @export
@@ -680,16 +756,20 @@ check_cross_study_alignment <- function(adppk) {
   miss <- .check_missing_vars(adppk, "STUDYID", "cross_study_alignment")
   if (!is.null(miss)) return(miss)
   st <- unique(adppk$STUDYID)
-  if (length(st) < 2) return(.pass_result("cross_study_alignment", "Single study only"))
+  # P3-3: single-study is not applicable (skip), not a pass
+  if (length(st) < 2) return(.skip_result("cross_study_alignment", "Single study only"))
 
   vars <- names(adppk)
-  issues <- data.frame()
-  for (v in vars) {
+  # P2-3: list accumulator
+  acc <- lapply(vars, function(v) {
     cls <- tapply(adppk[[v]], adppk$STUDYID, function(x) class(x)[1])
     if (length(unique(cls)) > 1) {
-      issues <- rbind(issues, data.frame(variable = v, details = paste(names(cls), cls, collapse = "; "), stringsAsFactors = FALSE))
-    }
-  }
+      data.frame(variable = v, details = paste(names(cls), cls, collapse = "; "),
+                 stringsAsFactors = FALSE)
+    } else NULL
+  })
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
 
   list(
     check_id = "cross_study_alignment",
@@ -705,19 +785,29 @@ check_cross_study_alignment <- function(adppk) {
 #' @return List with check result.
 #' @export
 check_standardized_values <- function(adppk) {
-  issues <- data.frame()
+  # P2-3: list accumulator; P0-4 style: add !is.na guards
+  acc <- list()
   if ("SEX" %in% names(adppk)) {
-    bad <- which(!toupper(trimws(adppk$SEX)) %in% c("M", "F", "U", "UNKNOWN"))
-    if (length(bad) > 0) issues <- rbind(issues, data.frame(variable = "SEX", USUBJID = adppk$USUBJID[bad], value = adppk$SEX[bad], stringsAsFactors = FALSE))
+    bad <- which(!is.na(adppk$SEX) & !toupper(trimws(adppk$SEX)) %in% c("M", "F", "U", "UNKNOWN"))
+    if (length(bad) > 0)
+      acc[[length(acc) + 1L]] <- data.frame(variable = "SEX", USUBJID = adppk$USUBJID[bad],
+                                             value = adppk$SEX[bad], stringsAsFactors = FALSE)
   }
   if ("RACE" %in% names(adppk)) {
-    bad <- which(grepl("^\\s|\\s$", adppk$RACE))
-    if (length(bad) > 0) issues <- rbind(issues, data.frame(variable = "RACE", USUBJID = adppk$USUBJID[bad], value = adppk$RACE[bad], stringsAsFactors = FALSE))
+    bad <- which(!is.na(adppk$RACE) & grepl("^\\s|\\s$", adppk$RACE))
+    if (length(bad) > 0)
+      acc[[length(acc) + 1L]] <- data.frame(variable = "RACE", USUBJID = adppk$USUBJID[bad],
+                                             value = adppk$RACE[bad], stringsAsFactors = FALSE)
   }
   if ("DOSE" %in% names(adppk)) {
-    bad <- which(round(as.numeric(adppk$DOSE), 6) != as.numeric(adppk$DOSE))
-    if (length(bad) > 0) issues <- rbind(issues, data.frame(variable = "DOSE", USUBJID = adppk$USUBJID[bad], value = adppk$DOSE[bad], stringsAsFactors = FALSE))
+    dose_num <- as.numeric(adppk$DOSE)
+    bad <- which(!is.na(dose_num) & round(dose_num, 6) != dose_num)
+    if (length(bad) > 0)
+      acc[[length(acc) + 1L]] <- data.frame(variable = "DOSE", USUBJID = adppk$USUBJID[bad],
+                                             value = adppk$DOSE[bad], stringsAsFactors = FALSE)
   }
+  issues <- do.call(rbind, Filter(Negate(is.null), acc))
+  if (is.null(issues)) issues <- data.frame()
 
   list(
     check_id = "standardized_values",
@@ -731,6 +821,11 @@ check_standardized_values <- function(adppk) {
 # orchestration --------------------------------------------------------
 
 #' Run selected checks
+#'
+#' Each check is wrapped in tryCatch so a single failing check never prevents
+#' the remaining checks from running.  Severity is derived from the dispatch
+#' registry defaults and can be overridden via the YAML config.
+#'
 #' @param adppk ADPPK data frame.
 #' @param addose ADDOSE data frame.
 #' @param selected Character vector of check ids.
@@ -738,65 +833,92 @@ check_standardized_values <- function(adppk) {
 #' @return Named list of check results.
 #' @export
 run_checks <- function(adppk, addose = data.frame(), selected = checks_registry()$id, cfg = NULL) {
+  # P2-1/P2-2: data-driven dispatch table (replaces 27 hard-coded if statements)
+  # P1-7: default_sev is the single source of truth for severity (YAML overrides below)
+  dispatch <- list(
+    required_vars              = list(fn = check_required_vars,              args = "adppk",        ts_dep = FALSE, default_sev = "model_blocker"),
+    name_label_len             = list(fn = check_name_label_len,             args = "adppk",        ts_dep = FALSE, default_sev = "error"),
+    pk_no_dose                 = list(fn = check_pk_no_dose,                 args = "adppk_addose", ts_dep = FALSE, default_sev = "model_blocker"),
+    poppk_consistency          = list(fn = check_poppk_consistency,          args = "adppk",        ts_dep = FALSE, default_sev = "error"),
+    char_num_mapping           = list(fn = check_char_num_mapping,           args = "adppk",        ts_dep = FALSE, default_sev = "error"),
+    char_truncation            = list(fn = check_char_truncation,            args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    fixed_covariates           = list(fn = check_fixed_covariates,           args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    predose_time               = list(fn = check_predose_time,               args = "adppk",        ts_dep = TRUE,  default_sev = "model_blocker"),
+    sampling_dev_10pct         = list(fn = check_sampling_deviation,         args = "adppk",        ts_dep = TRUE,  default_sev = "warn"),
+    unexpected_values          = list(fn = check_unexpected_values,          args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    covariate_outliers         = list(fn = check_covariate_outliers,         args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    nominal_actual_deviation   = list(fn = check_nominal_actual_deviation,   args = "adppk",        ts_dep = TRUE,  default_sev = "warn"),
+    nominal_actual_consistency = list(fn = check_nominal_actual_consistency, args = "adppk",        ts_dep = TRUE,  default_sev = "warn"),
+    missing_by_evid            = list(fn = check_missing_by_evid,            args = "adppk",        ts_dep = FALSE, default_sev = "info"),
+    duplicates                 = list(fn = check_duplicates,                 args = "adppk",        ts_dep = FALSE, default_sev = "model_blocker"),
+    expected_ranges            = list(fn = check_expected_ranges,            args = "adppk",        ts_dep = FALSE, default_sev = "error"),
+    bloq_middle                = list(fn = check_bloq_middle,                args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    high_predose               = list(fn = check_high_predose,               args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    amt_for_dose               = list(fn = check_amt_for_dose,               args = "adppk",        ts_dep = FALSE, default_sev = "model_blocker"),
+    mdv_assignment             = list(fn = check_mdv_assignment,             args = "adppk",        ts_dep = FALSE, default_sev = "model_blocker"),
+    evid4_once                 = list(fn = check_evid4_once,                 args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    time_sequential            = list(fn = check_time_sequential,            args = "adppk",        ts_dep = TRUE,  default_sev = "model_blocker"),
+    event_ordering             = list(fn = check_event_ordering,             args = "adppk",        ts_dep = TRUE,  default_sev = "model_blocker"),
+    obs_has_prior_dose         = list(fn = check_obs_has_prior_dose,         args = "adppk",        ts_dep = TRUE,  default_sev = "model_blocker"),
+    time_anchor_consistency    = list(fn = check_time_anchor_consistency,    args = "adppk",        ts_dep = TRUE,  default_sev = "warn"),
+    cross_study_alignment      = list(fn = check_cross_study_alignment,      args = "adppk",        ts_dep = FALSE, default_sev = "warn"),
+    standardized_values        = list(fn = check_standardized_values,        args = "adppk",        ts_dep = FALSE, default_sev = "info")
+  )
+
   ts_valid <- list(ok = TRUE, message = "ok")
   if (!is.null(cfg)) {
-    # Respect UI/user-selected checks; config acts as allowed-set filter.
     selected <- intersect(selected, enabled_checks(cfg))
     ts_valid <- validate_time_semantics(cfg)
   }
 
-  out <- list()
   cfg_item <- function(id) {
     if (is.null(cfg) || is.null(cfg$checks) || is.null(cfg$checks[[id]])) return(NULL)
     cfg$checks[[id]]
   }
 
-  if ("required_vars" %in% selected) out[["required_vars"]] <- run_check_with_cfg(check_required_vars, list(adppk = adppk), cfg_item("required_vars"))
-  if ("name_label_len" %in% selected) out[["name_label_len"]] <- run_check_with_cfg(check_name_label_len, list(adppk = adppk), cfg_item("name_label_len"))
-  if ("pk_no_dose" %in% selected) out[["pk_no_dose"]] <- run_check_with_cfg(check_pk_no_dose, list(adppk = adppk, addose = addose), cfg_item("pk_no_dose"))
-  if ("poppk_consistency" %in% selected) out[["poppk_consistency"]] <- run_check_with_cfg(check_poppk_consistency, list(adppk = adppk), cfg_item("poppk_consistency"))
-  if ("char_num_mapping" %in% selected) out[["char_num_mapping"]] <- run_check_with_cfg(check_char_num_mapping, list(adppk = adppk), cfg_item("char_num_mapping"))
-  if ("char_truncation" %in% selected) out[["char_truncation"]] <- run_check_with_cfg(check_char_truncation, list(adppk = adppk), cfg_item("char_truncation"))
-  if ("fixed_covariates" %in% selected) out[["fixed_covariates"]] <- run_check_with_cfg(check_fixed_covariates, list(adppk = adppk), cfg_item("fixed_covariates"))
-  if ("predose_time" %in% selected) out[["predose_time"]] <- if (ts_valid$ok) run_check_with_cfg(check_predose_time, list(adppk = adppk), cfg_item("predose_time")) else .skip_result("predose_time", paste("Skipped:", ts_valid$message))
-  if ("sampling_dev_10pct" %in% selected) out[["sampling_dev_10pct"]] <- if (ts_valid$ok) run_check_with_cfg(check_sampling_deviation, list(adppk = adppk), cfg_item("sampling_dev_10pct")) else .skip_result("sampling_dev_10pct", paste("Skipped:", ts_valid$message))
-  if ("unexpected_values" %in% selected) out[["unexpected_values"]] <- run_check_with_cfg(check_unexpected_values, list(adppk = adppk), cfg_item("unexpected_values"))
-  if ("covariate_outliers" %in% selected) out[["covariate_outliers"]] <- run_check_with_cfg(check_covariate_outliers, list(adppk = adppk), cfg_item("covariate_outliers"))
-  if ("nominal_actual_deviation" %in% selected) out[["nominal_actual_deviation"]] <- if (ts_valid$ok) run_check_with_cfg(check_nominal_actual_deviation, list(adppk = adppk), cfg_item("nominal_actual_deviation")) else .skip_result("nominal_actual_deviation", paste("Skipped:", ts_valid$message))
-  if ("nominal_actual_consistency" %in% selected) out[["nominal_actual_consistency"]] <- if (ts_valid$ok) run_check_with_cfg(check_nominal_actual_consistency, list(adppk = adppk), cfg_item("nominal_actual_consistency")) else .skip_result("nominal_actual_consistency", paste("Skipped:", ts_valid$message))
-  if ("missing_by_evid" %in% selected) out[["missing_by_evid"]] <- run_check_with_cfg(check_missing_by_evid, list(adppk = adppk), cfg_item("missing_by_evid"))
-  if ("duplicates" %in% selected) out[["duplicates"]] <- run_check_with_cfg(check_duplicates, list(adppk = adppk), cfg_item("duplicates"))
-  if ("expected_ranges" %in% selected) out[["expected_ranges"]] <- run_check_with_cfg(check_expected_ranges, list(adppk = adppk), cfg_item("expected_ranges"))
-  if ("bloq_middle" %in% selected) out[["bloq_middle"]] <- run_check_with_cfg(check_bloq_middle, list(adppk = adppk), cfg_item("bloq_middle"))
-  if ("high_predose" %in% selected) out[["high_predose"]] <- run_check_with_cfg(check_high_predose, list(adppk = adppk), cfg_item("high_predose"))
-  if ("amt_for_dose" %in% selected) out[["amt_for_dose"]] <- run_check_with_cfg(check_amt_for_dose, list(adppk = adppk), cfg_item("amt_for_dose"))
-  if ("mdv_assignment" %in% selected) out[["mdv_assignment"]] <- run_check_with_cfg(check_mdv_assignment, list(adppk = adppk), cfg_item("mdv_assignment"))
-  if ("evid4_once" %in% selected) out[["evid4_once"]] <- run_check_with_cfg(check_evid4_once, list(adppk = adppk), cfg_item("evid4_once"))
-  if ("time_sequential" %in% selected) out[["time_sequential"]] <- if (ts_valid$ok) run_check_with_cfg(check_time_sequential, list(adppk = adppk), cfg_item("time_sequential")) else .skip_result("time_sequential", paste("Skipped:", ts_valid$message))
-  if ("event_ordering" %in% selected) out[["event_ordering"]] <- if (ts_valid$ok) run_check_with_cfg(check_event_ordering, list(adppk = adppk), cfg_item("event_ordering")) else .skip_result("event_ordering", paste("Skipped:", ts_valid$message))
-  if ("obs_has_prior_dose" %in% selected) out[["obs_has_prior_dose"]] <- if (ts_valid$ok) run_check_with_cfg(check_obs_has_prior_dose, list(adppk = adppk), cfg_item("obs_has_prior_dose")) else .skip_result("obs_has_prior_dose", paste("Skipped:", ts_valid$message))
-  if ("time_anchor_consistency" %in% selected) out[["time_anchor_consistency"]] <- if (ts_valid$ok) run_check_with_cfg(check_time_anchor_consistency, list(adppk = adppk), cfg_item("time_anchor_consistency")) else .skip_result("time_anchor_consistency", paste("Skipped:", ts_valid$message))
-  if ("cross_study_alignment" %in% selected) out[["cross_study_alignment"]] <- run_check_with_cfg(check_cross_study_alignment, list(adppk = adppk), cfg_item("cross_study_alignment"))
-  if ("standardized_values" %in% selected) out[["standardized_values"]] <- run_check_with_cfg(check_standardized_values, list(adppk = adppk), cfg_item("standardized_values"))
+  out <- list()
 
-  sev_map <- c(
-    required_vars = "model_blocker", name_label_len = "error", pk_no_dose = "model_blocker", poppk_consistency = "error",
-    char_num_mapping = "error", char_truncation = "warn", fixed_covariates = "warn", predose_time = "model_blocker",
-    sampling_dev_10pct = "warn", unexpected_values = "warn", covariate_outliers = "warn",
-    nominal_actual_deviation = "warn", nominal_actual_consistency = "warn", missing_by_evid = "info",
-    duplicates = "model_blocker", expected_ranges = "error", bloq_middle = "warn", high_predose = "warn",
-    amt_for_dose = "model_blocker", mdv_assignment = "model_blocker", evid4_once = "warn", time_sequential = "model_blocker",
-    event_ordering = "model_blocker", obs_has_prior_dose = "model_blocker", time_anchor_consistency = "warn",
-    cross_study_alignment = "warn", standardized_values = "info"
-  )
-  if (!is.null(cfg)) {
-    ov <- severity_overrides(cfg)
-    for (k in names(ov)) sev_map[[k]] <- ov[[k]]
+  for (id in selected) {
+    entry <- dispatch[[id]]
+    if (is.null(entry)) next  # unknown id — skip silently
+
+    # Skip time-dependent checks when time semantics are invalid
+    if (isTRUE(entry$ts_dep) && !isTRUE(ts_valid$ok)) {
+      out[[id]] <- .skip_result(id, paste("Skipped:", ts_valid$message))
+      next
+    }
+
+    fn_args <- if (entry$args == "adppk_addose") {
+      list(adppk = adppk, addose = addose)
+    } else {
+      list(adppk = adppk)
+    }
+
+    # P1-6: per-check error isolation — one bad check never kills all results
+    out[[id]] <- tryCatch(
+      run_check_with_cfg(entry$fn, fn_args, cfg_item(id)),
+      error = function(e) {
+        list(
+          check_id    = id,
+          passed      = FALSE,
+          n_issue     = NA_integer_,
+          message     = paste("Check error:", conditionMessage(e)),
+          issue_table = data.frame(),
+          status      = "error"
+        )
+      }
+    )
   }
 
+  # P1-7/P2-6: severity applied exactly once, here.
+  # YAML config overrides the dispatch default; no duplicate sev_map vector.
   for (nm in names(out)) {
-    out[[nm]]$severity <- if (is.null(sev_map[[nm]])) "error" else unname(sev_map[[nm]])
+    entry   <- dispatch[[nm]]
+    def_sev <- if (!is.null(entry)) entry$default_sev else "error"
+    ci      <- cfg_item(nm)
+    out[[nm]]$severity <- if (!is.null(ci) && !is.null(ci$severity)) ci$severity else def_sev
   }
+
   out
 }
 
@@ -810,7 +932,8 @@ checks_registry <- function() {
       "char_truncation", "fixed_covariates", "predose_time", "sampling_dev_10pct", "unexpected_values",
       "covariate_outliers", "nominal_actual_deviation", "nominal_actual_consistency", "missing_by_evid", "duplicates",
       "expected_ranges", "bloq_middle", "high_predose", "amt_for_dose", "mdv_assignment",
-      "evid4_once", "time_sequential", "event_ordering", "obs_has_prior_dose", "time_anchor_consistency", "cross_study_alignment", "standardized_values"
+      "evid4_once", "time_sequential", "event_ordering", "obs_has_prior_dose", "time_anchor_consistency",
+      "cross_study_alignment", "standardized_values"
     ),
     label = c(
       "Required/conditional variables",

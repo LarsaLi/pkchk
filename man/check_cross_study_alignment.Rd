@@ -13,5 +13,5 @@ check_cross_study_alignment(adppk)
 List with check result.
 }
 \description{
-Align variable types/formats across studies
+Returns a skip result for single-study datasets (check is not applicable).
 }

@@ -13,5 +13,6 @@ check_expected_ranges(adppk)
 List with check result.
 }
 \description{
-Check expected ranges for common fields
+DOSE range is only checked for EVID=1 dosing records; observation rows
+(EVID=0) legitimately carry DOSE=NA or DOSE=0.
 }

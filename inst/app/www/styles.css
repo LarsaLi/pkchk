@@ -1,0 +1,124 @@
+/* pkchk dashboard styles — P1-4: extracted from run_app.R inline string */
+
+body {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #000 !important;
+}
+
+/* Header */
+.main-header .logo {
+  font-weight: 700;
+  letter-spacing: .2px;
+  background: #f7fafc !important;
+  color: #000 !important;
+  border-bottom: 1px solid #e7edf3;
+}
+.main-header .navbar {
+  background: #f7fafc !important;
+  border-bottom: 1px solid #e7edf3;
+}
+.main-header .sidebar-toggle { color: #000 !important; }
+
+/* Sidebar */
+.main-sidebar {
+  background: #f8fbfd !important;
+  border-right: 1px solid #e7edf3;
+}
+.sidebar-menu > li > a {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #000 !important;
+  font-weight: 700;
+}
+.sidebar-menu > li.active > a,
+.sidebar-menu > li:hover > a {
+  border-left-color: #6b8fa3 !important;
+  background: #e9f1f6 !important;
+  color: #000 !important;
+}
+.main-sidebar .shiny-input-container label { color: #000 !important; font-weight: 700; }
+.main-sidebar .form-control,
+.main-sidebar .selectize-input,
+.main-sidebar .selectize-dropdown,
+.main-sidebar input,
+.main-sidebar select,
+.main-sidebar textarea {
+  color: #000 !important;
+  background: #fff !important;
+}
+.main-sidebar .input-group-btn .btn { color: #000 !important; background: #f4f4f4 !important; }
+.main-sidebar .help-block,
+.main-sidebar .shiny-input-container .shiny-file-input-progress { color: #334155 !important; }
+
+/* Content */
+.content-wrapper, .right-side { background: #f5f8fb; }
+.content, .content * { color: #000 !important; }
+
+/* Boxes */
+.box {
+  border: 1px solid #e7edf3;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .04);
+}
+.box.box-primary > .box-header {
+  background: #f2f7fb;
+  color: #000;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  border-bottom: 1px solid #e7edf3;
+  font-weight: 700;
+}
+.box.box-info > .box-header {
+  background: #f2f8fa;
+  color: #000;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  border-bottom: 1px solid #e7edf3;
+  font-weight: 700;
+}
+.box.box-success > .box-header {
+  background: #f2faf6;
+  color: #000;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  border-bottom: 1px solid #e7edf3;
+  font-weight: 700;
+}
+.box.box-warning > .box-header {
+  background: #fcf8f1;
+  color: #000;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  border-bottom: 1px solid #e7edf3;
+  font-weight: 700;
+}
+
+/* Buttons */
+.btn { border-radius: 10px; font-weight: 600; }
+.btn-primary { background: #7ea5bf; border-color: #7ea5bf; color: #fff; }
+.btn-primary:hover { background: #7298b0; border-color: #7298b0; }
+.btn-success { background: #8fb6a1; border-color: #8fb6a1; color: #fff; }
+.btn-success:hover { background: #81a893; border-color: #81a893; }
+.btn-info { background: #9bb7c9; border-color: #9bb7c9; color: #fff; }
+
+/* Value boxes */
+.small-box { border-radius: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, .05); }
+.small-box.bg-aqua  { background: #d9ecf5 !important; color: #000 !important; }
+.small-box.bg-green { background: #e3f1e8 !important; color: #000 !important; }
+.small-box.bg-yellow { background: #f6efdd !important; color: #000 !important; }
+.small-box.bg-purple { background: #ece6f7 !important; color: #000 !important; }
+.small-box > .inner { padding: 14px 12px; }
+.small-box h3 { font-size: 28px; font-weight: 700; }
+.small-box p  { font-size: 13px; }
+.small-box .icon { color: rgba(31, 41, 55, .22) !important; }
+
+/* DataTables */
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  border-radius: 8px;
+  border: 1px solid #d5dee7;
+  background: #fff;
+}
+.table, .dataTable, .dataTables_wrapper { color: #1f2937 !important; }
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate { color: #374151 !important; }

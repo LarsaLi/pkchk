@@ -22,26 +22,39 @@ run_teal_app <- function(adppk = NULL, addose = NULL, dm = NULL, ex = NULL, pc =
     )
   }
 
-  if (is.null(adppk) || is.null(addose) || is.null(dm) || is.null(ex) || is.null(pc)) {
+  # P0-5: treat each dataset independently — only generate what is missing,
+  # never silently discard data the caller already supplied.
+  needs_gen <- is.null(adppk) || is.null(addose) || is.null(dm) || is.null(ex) || is.null(pc)
+  if (needs_gen) {
+    missing_names <- c(
+      if (is.null(adppk))  "adppk",
+      if (is.null(addose)) "addose",
+      if (is.null(dm))     "dm",
+      if (is.null(ex))     "ex",
+      if (is.null(pc))     "pc"
+    )
+    message("run_teal_app(): generating dummy data for missing datasets: ",
+            paste(missing_names, collapse = ", "))
     pkg <- generate_dummy_pk_package(
       study_type = "SAD",
       n_subj = 40,
       inject_test_issues = TRUE,
-      issue_level = "medium"
+      issue_level = "medium",
+      seed = 123  # fixed seed for reproducible teal fallback
     )
-    adppk <- pkg$adppk
-    addose <- pkg$addose
-    dm <- pkg$dm
-    ex <- pkg$ex
-    pc <- pkg$pc
+    if (is.null(adppk))  adppk  <- pkg$adppk
+    if (is.null(addose)) addose <- pkg$addose
+    if (is.null(dm))     dm     <- pkg$dm
+    if (is.null(ex))     ex     <- pkg$ex
+    if (is.null(pc))     pc     <- pkg$pc
   }
 
   data <- teal.data::teal_data(
-    ADPPK = adppk,
+    ADPPK  = adppk,
     ADDOSE = addose,
-    DM = dm,
-    EX = ex,
-    PC = pc
+    DM     = dm,
+    EX     = ex,
+    PC     = pc
   )
 
   app <- teal::init(

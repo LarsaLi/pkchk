@@ -1,3 +1,6 @@
+# Minimum supported config schema version
+.PKCHK_CONFIG_MIN_VERSION <- 1L
+
 #' Load check configuration from YAML
 #'
 #' @param path Optional path to YAML file. If NULL, use built-in default config.
@@ -10,7 +13,22 @@ load_check_config <- function(path = NULL) {
   if (!nzchar(path) || !file.exists(path)) {
     stop("Config file not found: ", path)
   }
-  yaml::read_yaml(path)
+  cfg <- yaml::read_yaml(path)
+
+  # P2-10: validate version field so old configs are caught early
+  ver <- cfg$version
+  if (!is.null(ver)) {
+    ver_int <- suppressWarnings(as.integer(ver))
+    if (!is.na(ver_int) && ver_int < .PKCHK_CONFIG_MIN_VERSION) {
+      warning(sprintf(
+        "Config version %s is below the minimum supported version %s. ",
+        ver, .PKCHK_CONFIG_MIN_VERSION,
+        "Some features may behave unexpectedly. Please update your config file."
+      ), call. = FALSE)
+    }
+  }
+
+  cfg
 }
 
 #' Get enabled check ids from config

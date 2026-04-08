@@ -15,3 +15,21 @@ list with score and counters.
 \description{
 Compute model readiness score from check summary
 }
+\details{
+\strong{Scoring formula:}
+\enumerate{
+\item \code{base = 100 * pass_n / (pass_n + fail_n)} (skipped checks excluded from denominator)
+\item \code{score = max(0, base - blocker_n * 10)}
+}
+The 10-point penalty per failing model-blocker reflects that a single
+structural issue (e.g. missing required variables) can make a dataset
+entirely unusable for modeling regardless of how well other checks pass.
+
+\strong{Status thresholds:}
+\itemize{
+\item \code{BLOCKED} — any model_blocker check has status "fail"
+\item \code{READY}   — score >= 90 (no blockers)
+\item \code{REVIEW}  — score >= 70 (no blockers)
+\item \code{NOT_READY} — score < 70 (no blockers)
+}
+}

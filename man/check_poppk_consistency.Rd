@@ -13,5 +13,7 @@ check_poppk_consistency(adppk)
 List with check result.
 }
 \description{
-Check POPPK consistency at subject and record level
+Non-POPPK subjects (POPPKFL != "Y") are flagged. NA values in POPPKFL are
+treated as non-violations to avoid false positives on dosing rows where the
+flag is not applicable.
 }

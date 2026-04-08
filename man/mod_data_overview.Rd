@@ -13,7 +13,8 @@ mod_data_overview(id)
 teal module
 }
 \description{
-teal module: data overview
+Provides a browsable data preview, per-column missingness summary, and
+dataset-level metrics for ADPPK.
 }
 \seealso{
 Other teal-modules: 
